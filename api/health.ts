@@ -1,28 +1,27 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { defaultProviderManager } from "@repolens/ai-providers";
-import { PostgresStore } from "@repolens/shared";
+import { PostgresStore, sendJson } from "@repolens/shared";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  res.setHeader("Content-Type", "application/json");
+  if (req.method === "OPTIONS") {
+    return sendJson(res, 200, { ok: true });
+  }
 
   try {
     const pg = new PostgresStore();
     const providers = defaultProviderManager.getAllProviders();
 
-    return res.end(
-      JSON.stringify({
-        status: "ok",
-        service: "RepoLens AI",
-        timestamp: new Date().toISOString(),
-        providers,
-        database: {
-          configured: pg.isAvailable(),
-          type: pg.isAvailable() ? "PostgreSQL" : "In-Memory Ephemeral",
-        },
-      })
-    );
+    return sendJson(res, 200, {
+      status: "ok",
+      service: "RepoLens AI",
+      timestamp: new Date().toISOString(),
+      providers,
+      database: {
+        configured: pg.isAvailable(),
+        type: pg.isAvailable() ? "PostgreSQL" : "In-Memory Ephemeral",
+      },
+    });
   } catch (err: any) {
-    res.statusCode = 500;
-    return res.end(JSON.stringify({ status: "error", message: err.message }));
+    return sendJson(res, 500, { status: "error", message: err.message });
   }
 }

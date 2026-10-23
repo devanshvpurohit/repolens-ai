@@ -8,7 +8,7 @@ import { z } from "zod";
 const AnalyzeSchema = z.object({
   repoUrl: z.string().min(1, "Repository URL is required"),
   commitSha: z.string().optional(),
-  maxFiles: z.number().min(1).max(1000).default(200),
+  maxFiles: z.number().min(1).max(1000).default(60),
 });
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -71,9 +71,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     job.currentStage = `Fetching source code for ${tree.length} files`;
     store.saveJob(job);
 
-    // 2. Fetch file contents in bounded batches
+    // 2. Fetch file contents in bounded batches with a strict 5s time budget
     const paths = tree.map((t) => t.path);
-    const fetchedFiles = await client.fetchBatchFiles(meta, paths, 5);
+    const fetchedFiles = await client.fetchBatchFiles(meta, paths, 10, 5000);
 
     job.processedFiles = fetchedFiles.length;
     job.status = "building-graph";

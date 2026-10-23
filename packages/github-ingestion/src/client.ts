@@ -163,13 +163,25 @@ export class GitHubClient {
   async fetchBatchFiles(
     meta: RepoMetadata,
     paths: string[],
-    concurrency = 5
+    concurrency = 10,
+    timeBudgetMs = 5500
   ): Promise<IngestedFile[]> {
     const results: IngestedFile[] = [];
-    const queue = [...paths];
+
+    // Prioritize critical architecture, manifest, and entry files first
+    const sortedPaths = [...paths].sort((a, b) => {
+      const isPriorityA = /package\.json|readme|index\.|app\.|main\.|vite\.config|tsconfig|\.env/i.test(a);
+      const isPriorityB = /package\.json|readme|index\.|app\.|main\.|vite\.config|tsconfig|\.env/i.test(b);
+      if (isPriorityA && !isPriorityB) return -1;
+      if (!isPriorityA && isPriorityB) return 1;
+      return a.split("/").length - b.split("/").length; // Shallow files first
+    });
+
+    const queue = [...sortedPaths];
+    const deadline = Date.now() + timeBudgetMs;
 
     const worker = async () => {
-      while (queue.length > 0) {
+      while (queue.length > 0 && Date.now() < deadline) {
         const path = queue.shift();
         if (!path) break;
         try {
@@ -181,7 +193,7 @@ export class GitHubClient {
       }
     };
 
-    const workers = Array.from({ length: Math.min(concurrency, paths.length) }, () => worker());
+    const workers = Array.from({ length: Math.min(concurrency, sortedPaths.length) }, () => worker());
     await Promise.all(workers);
     return results;
   }

@@ -99,7 +99,7 @@ export class ApiClient {
     });
   }
 
-  static async analyzeRepo(repoUrl: string, maxFiles = 200): Promise<AnalyzeResponse> {
+  static async analyzeRepo(repoUrl: string, maxFiles = 60): Promise<AnalyzeResponse> {
     return this.request<AnalyzeResponse>("/api/repositories/analyze", {
       method: "POST",
       body: JSON.stringify({ repoUrl, maxFiles }),
