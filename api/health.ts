@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { defaultProviderManager } from "@repolens/ai-providers";
-import { PostgresStore, sendJson } from "@repolens/shared";
+import { defaultProviderManager } from "../packages/ai-providers/src/index";
+import { PostgresStore, sendJson } from "../packages/shared/src/index";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method === "OPTIONS") {

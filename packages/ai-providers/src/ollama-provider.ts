@@ -1,4 +1,4 @@
-import type { AIProvider, GenerateOptions, GenerateResult, HealthCheckResult } from "./types.js";
+import type { AIProvider, GenerateOptions, GenerateResult, HealthCheckResult } from "./types";
 
 export class OllamaProvider implements AIProvider {
   readonly id = "ollama";

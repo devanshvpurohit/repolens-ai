@@ -1,3 +1,3 @@
-export * from "./chunker.js";
-export * from "./retriever.js";
-export * from "./citation-validator.js";
+export * from "./chunker";
+export * from "./retriever";
+export * from "./citation-validator";

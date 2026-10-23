@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import type { AIProvider, GenerateOptions, GenerateResult, HealthCheckResult } from "./types.js";
+import type { AIProvider, GenerateOptions, GenerateResult, HealthCheckResult } from "./types";
 
 export class GeminiProvider implements AIProvider {
   readonly id = "gemini";

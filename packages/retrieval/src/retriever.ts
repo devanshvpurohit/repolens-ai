@@ -1,4 +1,4 @@
-import type { SourceChunk } from "./chunker.js";
+import type { SourceChunk } from "./chunker";
 import type { KnowledgeGraph } from "@repolens/graph-schema";
 
 export interface RetrievalResult {

@@ -1,8 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { defaultProviderManager, type ProviderId } from "@repolens/ai-providers";
-import { getRepositoryStore } from "@repolens/shared";
-import { RepositoryRetriever, extractCitationsFromText, validateCitations } from "@repolens/retrieval";
-import { parseJsonBody, sendJson } from "@repolens/shared";
+import { defaultProviderManager, type ProviderId } from "../../packages/ai-providers/src/index";
+import { getRepositoryStore, parseJsonBody, sendJson } from "../../packages/shared/src/index";
+import { RepositoryRetriever, extractCitationsFromText, validateCitations } from "../../packages/retrieval/src/index";
 import { z } from "zod";
 
 const ChatRequestSchema = z.object({
@@ -40,7 +39,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const results = retriever.search(parsed.data.message, 6);
 
     // 2. Assemble grounded context with strict token budget
-    const contextBlocks = results.map((r, idx) => {
+    const contextBlocks = results.map((r) => {
       return `--- File: ${r.chunk.filePath} (Lines ${r.chunk.startLine}-${r.chunk.endLine}) ---\n${r.chunk.content}\n`;
     });
 
@@ -76,43 +75,22 @@ ${contextBlocks.join("\n\n")}`;
       },
     };
 
-    const extractedCitations = extractCitationsFromText(
-      aiResponse.text,
-      fileStoreAdapter,
-      project.commitSha
-    );
-
-    // Also include the top retrieved chunks as citations if none extracted directly
-    if (extractedCitations.length === 0 && results.length > 0) {
-      for (const r of results.slice(0, 3)) {
-        extractedCitations.push({
-          path: r.chunk.filePath,
-          startLine: r.chunk.startLine,
-          endLine: r.chunk.endLine,
-          commitSha: project.commitSha,
-        });
-      }
-    }
-
-    const verifiedCitations = validateCitations(
-      extractedCitations,
-      fileStoreAdapter,
-      project.commitSha
-    );
+    const commitSha = project.commitSha || "main";
+    const extracted = extractCitationsFromText(aiResponse.text, fileStoreAdapter, commitSha);
+    const validCitations = validateCitations(extracted, fileStoreAdapter, commitSha);
+    const limitations: string[] = [];
 
     return sendJson(res, 200, {
       answer: aiResponse.text,
       model: aiResponse.model,
       provider: aiResponse.provider,
-      citations: verifiedCitations,
+      citations: validCitations,
+      limitations,
       usage: aiResponse.usage,
-      limitations: [
-        "Static analysis cannot establish dynamic runtime behavior (e.g. database query results, environment secrets, or external API responses).",
-      ],
     });
   } catch (err: any) {
     return sendJson(res, 500, {
-      error: err.message || "Failed to process chat query",
+      error: err.message || "Failed to generate chat answer",
     });
   }
 }

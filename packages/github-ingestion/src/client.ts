@@ -1,6 +1,6 @@
-import { parseGitHubUrl, type ParsedGitHubUrl } from "./url-parser.js";
-import { shouldIncludeFile } from "./filter.js";
-import { validateSafeUrl } from "./safety.js";
+import { parseGitHubUrl, type ParsedGitHubUrl } from "./url-parser";
+import { shouldIncludeFile } from "./filter";
+import { validateSafeUrl } from "./safety";
 
 export interface RepoMetadata {
   owner: string;

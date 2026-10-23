@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { defaultProviderManager, type ProviderId } from "@repolens/ai-providers";
-import { parseJsonBody, sendJson } from "@repolens/shared";
+import { defaultProviderManager, type ProviderId } from "../../packages/ai-providers/src/index";
+import { parseJsonBody, sendJson } from "../../packages/shared/src/index";
 import { z } from "zod";
 
 const FetchModelsSchema = z.object({

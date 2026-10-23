@@ -1,5 +1,5 @@
 import type { KnowledgeGraph } from "@repolens/graph-schema";
-import type { StoredProject } from "./store.js";
+import type { StoredProject } from "./store";
 import type { IngestedFile } from "@repolens/github-ingestion";
 import type { SourceChunk } from "@repolens/retrieval";
 

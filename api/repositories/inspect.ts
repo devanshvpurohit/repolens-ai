@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { GitHubClient, parseGitHubUrl } from "@repolens/github-ingestion";
-import { parseJsonBody, sendJson } from "@repolens/shared";
+import { GitHubClient } from "../../packages/github-ingestion/src/index";
+import { parseJsonBody, sendJson } from "../../packages/shared/src/index";
 import { z } from "zod";
 
 const InspectSchema = z.object({

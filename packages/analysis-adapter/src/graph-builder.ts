@@ -6,9 +6,9 @@ import type {
   TourStep,
 } from "@repolens/graph-schema";
 import { autoFixGraph, validateGraph } from "@repolens/graph-schema";
-import { extractSymbolsFromContent, type FileAnalysisResult } from "./ast-extractor.js";
-import { detectLanguage } from "./language-detector.js";
-import { detectArchitectureLayers } from "./layer-detector.js";
+import { extractSymbolsFromContent, type FileAnalysisResult } from "./ast-extractor";
+import { detectLanguage } from "./language-detector";
+import { detectArchitectureLayers } from "./layer-detector";
 
 export interface BuildGraphOptions {
   projectMeta: ProjectMeta;

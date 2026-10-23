@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { KnowledgeGraph, GraphNode, GraphEdge } from "./types.js";
+import type { KnowledgeGraph, GraphNode, GraphEdge } from "./types";
 
 export const NodeTypeSchema = z.enum([
   "file",

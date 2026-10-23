@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { getRepositoryStore, sendJson, parseJsonBody } from "@repolens/shared";
-import { RepoAuditor, type AuditReport } from "@repolens/analysis-adapter";
-import { defaultProviderManager, type ProviderId } from "@repolens/ai-providers";
+import { getRepositoryStore, sendJson, parseJsonBody } from "../../packages/shared/src/index";
+import { RepoAuditor, type AuditReport } from "../../packages/analysis-adapter/src/index";
+import { defaultProviderManager, type ProviderId } from "../../packages/ai-providers/src/index";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method === "OPTIONS") {

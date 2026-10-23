@@ -91,7 +91,7 @@ export class MemoryStore {
 }
 
 // Global singleton for serverless container reuse
-import { getDemoProject } from "./demo-data.js";
+import { getDemoProject } from "./demo-data";
 
 const globalStore = (globalThis as any).__repolens_store || new MemoryStore();
 if (!globalStore.getProject("demo-express-react-app")) {

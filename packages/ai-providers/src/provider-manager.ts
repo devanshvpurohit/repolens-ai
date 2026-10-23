@@ -1,8 +1,8 @@
-import type { AIProvider, ProviderId } from "./types.js";
-import { GeminiProvider } from "./gemini-provider.js";
-import { OpenAIProvider } from "./openai-provider.js";
-import { AnthropicProvider } from "./anthropic-provider.js";
-import { OllamaProvider } from "./ollama-provider.js";
+import type { AIProvider, ProviderId } from "./types";
+import { GeminiProvider } from "./gemini-provider";
+import { OpenAIProvider } from "./openai-provider";
+import { AnthropicProvider } from "./anthropic-provider";
+import { OllamaProvider } from "./ollama-provider";
 
 export class ProviderManager {
   private readonly providers = new Map<ProviderId, AIProvider>();

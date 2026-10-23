@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { getRepositoryStore, sendJson } from "@repolens/shared";
+import { getRepositoryStore, sendJson } from "../../packages/shared/src/index";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "GET") {

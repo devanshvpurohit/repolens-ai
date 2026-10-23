@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { GitHubClient } from "@repolens/github-ingestion";
-import { buildKnowledgeGraph } from "@repolens/analysis-adapter";
-import { chunkSourceFile, type SourceChunk } from "@repolens/retrieval";
-import { getRepositoryStore, type AnalysisJob, parseJsonBody, sendJson } from "@repolens/shared";
+import { GitHubClient } from "../../packages/github-ingestion/src/index";
+import { buildKnowledgeGraph } from "../../packages/analysis-adapter/src/index";
+import { chunkSourceFile, type SourceChunk } from "../../packages/retrieval/src/index";
+import { getRepositoryStore, type AnalysisJob, parseJsonBody, sendJson } from "../../packages/shared/src/index";
 import { z } from "zod";
 
 const AnalyzeSchema = z.object({
@@ -134,11 +134,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       projectId,
       status: "completed",
       progress: 100,
+      cached: false,
       graph,
+      metadata: meta,
     });
   } catch (err: any) {
     return sendJson(res, 500, {
-      error: err.message || "Repository analysis failed",
+      error: err.message || "Failed to analyze repository",
     });
   }
 }
