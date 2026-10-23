@@ -71,6 +71,9 @@ function apiDevServerPlugin() {
 }
 
 export default defineConfig({
+  define: {
+    "process.env": {},
+  },
   plugins: [react(), tailwindcss(), apiDevServerPlugin()],
   resolve: {
     alias: {

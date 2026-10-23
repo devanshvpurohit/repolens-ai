@@ -36,14 +36,16 @@ export class GitHubClient {
   private readonly token?: string;
 
   constructor(token?: string) {
-    this.token = token || process.env.GITHUB_TOKEN;
+    this.token = token || (typeof process !== "undefined" && process?.env ? process.env.GITHUB_TOKEN : undefined);
   }
 
   private getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
-      "User-Agent": "RepoLens-AI/1.0",
       Accept: "application/vnd.github.v3+json",
     };
+    if (typeof window === "undefined") {
+      headers["User-Agent"] = "RepoLens-AI/1.0";
+    }
     if (this.token) {
       headers.Authorization = `Bearer ${this.token}`;
     }

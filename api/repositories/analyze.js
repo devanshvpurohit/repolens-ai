@@ -203,13 +203,15 @@ function shouldIncludeFile(path, options) {
 var GitHubClient = class {
   token;
   constructor(token) {
-    this.token = token || process.env.GITHUB_TOKEN;
+    this.token = token || (typeof process !== "undefined" && process?.env ? process.env.GITHUB_TOKEN : void 0);
   }
   getHeaders() {
     const headers = {
-      "User-Agent": "RepoLens-AI/1.0",
       Accept: "application/vnd.github.v3+json"
     };
+    if (typeof window === "undefined") {
+      headers["User-Agent"] = "RepoLens-AI/1.0";
+    }
     if (this.token) {
       headers.Authorization = `Bearer ${this.token}`;
     }
@@ -5222,7 +5224,7 @@ export class DatabasePool {
 
   constructor() {
     this.pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: typeof process !== "undefined" && process?.env ? process.env.DATABASE_URL : undefined,
     });
   }
 

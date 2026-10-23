@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { ApiClient, type InspectResponse } from "@/lib/api-client";
 import { useRepoStore } from "@/stores/repo-store";
 import { ClientAnalyzer } from "@/services/client-analyzer";
+import { GitHubClient } from "@repolens/github-ingestion";
 import {
   GitBranch,
   Search,
@@ -50,8 +51,20 @@ export function AnalyzePage() {
       setInspectData(data);
       setStatus("ready");
     } catch (err: any) {
-      setErrorMessage(err.message || "Failed to inspect repository.");
-      setStatus("error");
+      try {
+        const client = new GitHubClient();
+        const meta = await client.resolveRepository(urlToInspect.trim());
+        const tree = await client.fetchFilteredTree(meta, { maxFiles: 100 });
+        setInspectData({
+          metadata: meta,
+          totalEligibleFiles: tree.length,
+          filePreview: tree.slice(0, 15).map((t) => t.path),
+        });
+        setStatus("ready");
+      } catch (clientErr: any) {
+        setErrorMessage(clientErr.message || err.message || "Failed to inspect repository.");
+        setStatus("error");
+      }
     }
   };
 

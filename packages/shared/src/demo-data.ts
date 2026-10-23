@@ -256,7 +256,7 @@ export class DatabasePool {
 
   constructor() {
     this.pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: typeof process !== "undefined" && process?.env ? process.env.DATABASE_URL : undefined,
     });
   }
 
