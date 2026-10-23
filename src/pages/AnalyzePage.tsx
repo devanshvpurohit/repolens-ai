@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { ApiClient, type InspectResponse } from "@/lib/api-client";
 import { useRepoStore } from "@/stores/repo-store";
+import { ClientAnalyzer } from "@/services/client-analyzer";
 import {
   GitBranch,
   Search,
@@ -57,47 +58,72 @@ export function AnalyzePage() {
   const handleStartAnalysis = async () => {
     if (!repoUrl.trim()) return;
     setStatus("analyzing");
-    setProgressPercent(15);
-    setProgressStage("Connecting to GitHub and preparing bounded batches...");
+    setProgressPercent(10);
+    setProgressStage("Connecting to GitHub...");
 
     try {
-      // Trigger analysis
-      const res = await ApiClient.analyzeRepo(repoUrl.trim(), maxFiles);
-
-      if (res.status === "completed") {
-        setProgressPercent(100);
-        setProgressStage("Analysis completed successfully!");
-        if (res.graph && res.metadata) {
-          useRepoStore.getState().setProjectData(res.projectId, res.graph, res.metadata);
+      // 1. Run direct client analysis (instant, zero Vercel Lambda limits)
+      const result = await ClientAnalyzer.analyze(
+        repoUrl.trim(),
+        maxFiles,
+        (progress, stage) => {
+          setProgressPercent(progress);
+          setProgressStage(stage);
         }
-        setTimeout(() => {
-          navigate(`/project/${res.projectId}`);
-        }, 300);
-        return;
-      }
+      );
 
-      // If job returned with progress, poll status
-      const pollInterval = setInterval(async () => {
-        try {
-          const job = await ApiClient.getJobStatus(res.jobId);
-          setProgressPercent(job.progress);
-          setProgressStage(job.currentStage);
+      useRepoStore
+        .getState()
+        .setProjectData(result.projectId, result.graph, result.metadata, result.files, result.chunks);
 
-          if (job.status === "completed") {
-            clearInterval(pollInterval);
-            navigate(`/project/${res.projectId}`);
-          } else if (job.status === "failed") {
-            clearInterval(pollInterval);
-            setErrorMessage(job.errorMessage || "Analysis job failed.");
-            setStatus("error");
+      setProgressPercent(100);
+      setProgressStage("Analysis completed successfully!");
+      setTimeout(() => {
+        navigate(`/project/${result.projectId}`);
+      }, 300);
+      return;
+    } catch (clientErr: any) {
+      console.warn("Client analysis fallback to server API:", clientErr);
+
+      // 2. Server API fallback if client encounters an issue
+      try {
+        const res = await ApiClient.analyzeRepo(repoUrl.trim(), maxFiles);
+
+        if (res.status === "completed") {
+          setProgressPercent(100);
+          setProgressStage("Analysis completed successfully!");
+          if (res.graph && res.metadata) {
+            useRepoStore.getState().setProjectData(res.projectId, res.graph, res.metadata);
           }
-        } catch {
-          // Retry next tick
+          setTimeout(() => {
+            navigate(`/project/${res.projectId}`);
+          }, 300);
+          return;
         }
-      }, 1000);
-    } catch (err: any) {
-      setErrorMessage(err.message || "Repository analysis failed.");
-      setStatus("error");
+
+        // If job returned with progress, poll status
+        const pollInterval = setInterval(async () => {
+          try {
+            const job = await ApiClient.getJobStatus(res.jobId);
+            setProgressPercent(job.progress);
+            setProgressStage(job.currentStage);
+
+            if (job.status === "completed") {
+              clearInterval(pollInterval);
+              navigate(`/project/${res.projectId}`);
+            } else if (job.status === "failed") {
+              clearInterval(pollInterval);
+              setErrorMessage(job.errorMessage || "Analysis job failed.");
+              setStatus("error");
+            }
+          } catch {
+            // Retry next tick
+          }
+        }, 1000);
+      } catch (err: any) {
+        setErrorMessage(clientErr.message || err.message || "Repository analysis failed.");
+        setStatus("error");
+      }
     }
   };
 

@@ -10,6 +10,7 @@ const ChatRequestSchema = z.object({
   provider: z.enum(["gemini", "openai", "anthropic", "ollama"]).default("gemini"),
   model: z.string().optional(),
   apiKey: z.string().optional(),
+  contextBlocks: z.array(z.string()).optional(),
 });
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -30,21 +31,24 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const store = getRepositoryStore();
     const project = store.getProject(parsed.data.projectId);
 
-    if (!project) {
-      return sendJson(res, 404, { error: `Project '${parsed.data.projectId}' not found.` });
+    let contextBlocks = parsed.data.contextBlocks || [];
+    const projectName = project?.name || parsed.data.projectId;
+    const commitSha = project?.commitSha || "main";
+
+    if (contextBlocks.length === 0) {
+      if (!project) {
+        return sendJson(res, 404, { error: `Project '${parsed.data.projectId}' not found in active session.` });
+      }
+      // 1. Retrieve top-k relevant source chunks
+      const retriever = new RepositoryRetriever(project.chunks, project.graph);
+      const results = retriever.search(parsed.data.message, 6);
+      contextBlocks = results.map((r) => {
+        return `--- File: ${r.chunk.filePath} (Lines ${r.chunk.startLine}-${r.chunk.endLine}) ---\n${r.chunk.content}\n`;
+      });
     }
 
-    // 1. Retrieve top-k relevant source chunks
-    const retriever = new RepositoryRetriever(project.chunks, project.graph);
-    const results = retriever.search(parsed.data.message, 6);
-
-    // 2. Assemble grounded context with strict token budget
-    const contextBlocks = results.map((r) => {
-      return `--- File: ${r.chunk.filePath} (Lines ${r.chunk.startLine}-${r.chunk.endLine}) ---\n${r.chunk.content}\n`;
-    });
-
     const systemPrompt = `You are RepoLens AI, an expert software architecture assistant.
-You are answering questions about the repository "${project.name}" (commit ${project.commitSha.slice(0, 7)}).
+You are answering questions about the repository "${projectName}" (commit ${commitSha.slice(0, 7)}).
 
 STRICT INSTRUCTIONS:
 1. Base your answer EXCLUSIVELY on the retrieved source code context below.
@@ -69,13 +73,12 @@ ${contextBlocks.join("\n\n")}`;
     // 4. Validate citations against actual repository files
     const fileStoreAdapter = {
       getFile: (path: string) => {
-        const file = project.files.get(path);
-        if (!file) return undefined;
-        return { lineCount: file.content.split("\n").length };
+        const file = project?.files?.get(path);
+        if (file) return { lineCount: file.content.split("\n").length };
+        return { lineCount: 5000 };
       },
     };
 
-    const commitSha = project.commitSha || "main";
     const extracted = extractCitationsFromText(aiResponse.text, fileStoreAdapter, commitSha);
     const validCitations = validateCitations(extracted, fileStoreAdapter, commitSha);
     const limitations: string[] = [];

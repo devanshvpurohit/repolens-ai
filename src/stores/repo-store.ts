@@ -2,7 +2,11 @@ import { create } from "zustand";
 import type { KnowledgeGraph, GraphNode } from "@repolens/graph-schema";
 import type { RepoMetadata } from "@repolens/github-ingestion";
 import type { AuditReport, AuditItem } from "@repolens/analysis-adapter";
+import { RepoAuditor } from "@repolens/analysis-adapter";
+import type { SourceChunk } from "@repolens/retrieval";
+import { RepositoryRetriever } from "@repolens/retrieval";
 import { ApiClient } from "@/lib/api-client";
+import { ClientAnalyzer } from "@/services/client-analyzer";
 
 export interface ChatMessageItem {
   id: string;
@@ -51,9 +55,19 @@ interface RepoState {
   auditReport: AuditReport | null;
   isAuditing: boolean;
 
+  // Local client cache
+  filesCache: Map<string, string>;
+  chunksCache: SourceChunk[];
+
   // Actions
   setProjectId: (id: string) => void;
-  setProjectData: (id: string, graph: KnowledgeGraph, metadata: RepoMetadata) => void;
+  setProjectData: (
+    id: string,
+    graph: KnowledgeGraph,
+    metadata: RepoMetadata,
+    files?: Map<string, string>,
+    chunks?: SourceChunk[]
+  ) => void;
   loadProject: (id: string) => Promise<void>;
   selectNode: (node: GraphNode | null) => void;
   loadFile: (path: string, lineRange?: [number, number]) => Promise<void>;
@@ -122,21 +136,37 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   auditReport: null,
   isAuditing: false,
 
+  filesCache: new Map<string, string>(),
+  chunksCache: [],
+
   openApiKeyModal: () => set({ isApiKeyModalOpen: true }),
   closeApiKeyModal: () => set({ isApiKeyModalOpen: false }),
 
   setProjectId: (id) => set({ projectId: id }),
 
-  setProjectData: (id, graph, metadata) => {
+  setProjectData: (id, graph, metadata, files, chunks) => {
+    const filesMap = files || new Map<string, string>();
+    const chunksArr = chunks || [];
     set({
       projectId: id,
       graph,
       metadata,
+      filesCache: filesMap,
+      chunksCache: chunksArr,
       isLoading: false,
       error: null,
     });
+
     try {
-      sessionStorage.setItem(`repolens_project_${id}`, JSON.stringify({ graph, metadata }));
+      sessionStorage.setItem(
+        `repolens_project_${id}`,
+        JSON.stringify({
+          graph,
+          metadata,
+          files: Array.from(filesMap.entries()),
+          chunks: chunksArr,
+        })
+      );
     } catch {}
 
     const firstFile = graph.nodes.find((n) => n.type === "file");
@@ -157,12 +187,15 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     try {
       const cached = sessionStorage.getItem(`repolens_project_${id}`);
       if (cached) {
-        const { graph, metadata } = JSON.parse(cached);
+        const { graph, metadata, files, chunks } = JSON.parse(cached);
         if (graph && metadata) {
+          const filesMap = new Map<string, string>(files || []);
           set({
             projectId: id,
             graph,
             metadata,
+            filesCache: filesMap,
+            chunksCache: chunks || [],
             isLoading: false,
             error: null,
           });
@@ -176,7 +209,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       }
     } catch {}
 
-    // 3. Fallback to API
+    // 3. Fallback to server API
     set({ isLoading: true, error: null, projectId: id });
     try {
       const data = await ApiClient.getGraph(id);
@@ -187,19 +220,40 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       });
 
       try {
-        sessionStorage.setItem(`repolens_project_${id}`, JSON.stringify({ graph: data.graph, metadata: data.metadata }));
+        sessionStorage.setItem(
+          `repolens_project_${id}`,
+          JSON.stringify({ graph: data.graph, metadata: data.metadata })
+        );
       } catch {}
 
-      // Default select the first file if available
       const firstFile = data.graph.nodes.find((n) => n.type === "file");
       if (firstFile && firstFile.filePath) {
         get().loadFile(firstFile.filePath);
       }
 
-      // Automatically run repository code audit in background
       get().runAudit(id);
-    } catch (err: any) {
-      set({ error: err.message || "Failed to load repository graph", isLoading: false });
+      return;
+    } catch {
+      // 4. On-demand client-side fallback if server lacks project in memory
+      const match = id.match(/^([a-zA-Z0-9_.-]+)-([a-zA-Z0-9_.-]+)-([a-zA-Z0-9]+)$/);
+      if (match) {
+        try {
+          const [, owner, repo] = match;
+          const result = await ClientAnalyzer.analyze(`https://github.com/${owner}/${repo}`, 50);
+          get().setProjectData(
+            result.projectId,
+            result.graph,
+            result.metadata,
+            result.files,
+            result.chunks
+          );
+          return;
+        } catch (clientErr: any) {
+          set({ error: clientErr.message || "Failed to load repository graph", isLoading: false });
+          return;
+        }
+      }
+      set({ error: "Repository project not found", isLoading: false });
     }
   },
 
@@ -211,16 +265,40 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   },
 
   loadFile: async (path, lineRange) => {
-    const { projectId } = get();
+    const { projectId, filesCache, metadata } = get();
     if (!projectId) return;
 
     set({ activeFilePath: path, activeLineRange: lineRange || null, isLoadingFile: true });
+
+    // 1. Check local files cache first (0ms instant response)
+    if (filesCache && filesCache.has(path)) {
+      set({ activeFileContent: filesCache.get(path)!, isLoadingFile: false });
+      return;
+    }
+
+    // 2. Try server API
     try {
       const fileData = await ApiClient.getFile(projectId, path);
+      if (filesCache) filesCache.set(path, fileData.content);
       set({ activeFileContent: fileData.content, isLoadingFile: false });
-    } catch {
-      set({ activeFileContent: "// Unable to load file content.", isLoadingFile: false });
+      return;
+    } catch {}
+
+    // 3. Fallback to direct raw GitHub content fetch
+    if (metadata && metadata.owner && metadata.repo) {
+      try {
+        const rawUrl = `https://raw.githubusercontent.com/${metadata.owner}/${metadata.repo}/${metadata.commitSha}/${path}`;
+        const resp = await fetch(rawUrl);
+        if (resp.ok) {
+          const content = await resp.text();
+          if (filesCache) filesCache.set(path, content);
+          set({ activeFileContent: content, isLoadingFile: false });
+          return;
+        }
+      } catch {}
     }
+
+    set({ activeFileContent: "// Unable to load file content from repository.", isLoadingFile: false });
   },
 
   setTypeFilter: (type) => set({ selectedTypeFilter: type }),
@@ -282,12 +360,11 @@ export const useRepoStore = create<RepoState>((set, get) => ({
   },
 
   sendChatMessage: async (message) => {
-    const { projectId, activeProvider, activeModel, byokKeys, chatMessages } = get();
+    const { projectId, activeProvider, activeModel, byokKeys, chatMessages, chunksCache, graph } = get();
     if (!projectId) return;
 
     // If activeProvider is not ollama and no key is provided, prompt the modal immediately
     if (activeProvider !== "ollama" && !byokKeys[activeProvider]) {
-      // First check if there is an env key or if we should prompt
       get().openApiKeyModal();
     }
 
@@ -304,12 +381,23 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     });
 
     try {
+      // Assemble retrieved context blocks client-side if chunks are in memory
+      let contextBlocks: string[] | undefined;
+      if (chunksCache && chunksCache.length > 0 && graph) {
+        const retriever = new RepositoryRetriever(chunksCache, graph);
+        const results = retriever.search(message, 6);
+        contextBlocks = results.map(
+          (r) => `--- File: ${r.chunk.filePath} (Lines ${r.chunk.startLine}-${r.chunk.endLine}) ---\n${r.chunk.content}\n`
+        );
+      }
+
       const res = await ApiClient.chat({
         projectId,
         message,
         provider: activeProvider,
         model: activeModel,
         apiKey: byokKeys[activeProvider],
+        contextBlocks,
       });
 
       const assistantMsg: ChatMessageItem = {
@@ -352,14 +440,30 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
     set({ isAuditing: true });
     try {
-      const { activeProvider, byokKeys } = get();
-      const report = await ApiClient.auditRepo(id, {
-        useAi,
-        provider: activeProvider,
-        apiKey: byokKeys[activeProvider],
-      });
-      set({ auditReport: report, isAuditing: false });
-      return report;
+      const { activeProvider, byokKeys, filesCache } = get();
+
+      // 1. Try server audit first
+      try {
+        const report = await ApiClient.auditRepo(id, {
+          useAi,
+          provider: activeProvider,
+          apiKey: byokKeys[activeProvider],
+        });
+        set({ auditReport: report, isAuditing: false });
+        return report;
+      } catch (serverErr) {
+        // 2. Fallback: run deterministic audit client-side if files are cached
+        if (filesCache && filesCache.size > 0) {
+          const filesMap = new Map();
+          for (const [path, content] of filesCache.entries()) {
+            filesMap.set(path, { path, content, sizeBytes: content.length, sha: "" });
+          }
+          const report = RepoAuditor.auditFiles(id, filesMap);
+          set({ auditReport: report, isAuditing: false });
+          return report;
+        }
+        throw serverErr;
+      }
     } catch (e) {
       console.error("Failed to run repository audit:", e);
       set({ isAuditing: false });

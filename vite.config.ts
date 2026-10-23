@@ -26,27 +26,27 @@ function apiDevServerPlugin() {
         try {
           let routeFile = "";
           if (url === "/api/health") {
-            routeFile = "./api/health.ts";
+            routeFile = "./api-src/health.ts";
           } else if (url === "/api/repositories/inspect") {
-            routeFile = "./api/repositories/inspect.ts";
+            routeFile = "./api-src/repositories/inspect.ts";
           } else if (url === "/api/repositories/analyze") {
-            routeFile = "./api/repositories/analyze.ts";
+            routeFile = "./api-src/repositories/analyze.ts";
           } else if (url === "/api/repositories/status") {
-            routeFile = "./api/repositories/status.ts";
+            routeFile = "./api-src/repositories/status.ts";
           } else if (url === "/api/repositories/graph") {
-            routeFile = "./api/repositories/graph.ts";
+            routeFile = "./api-src/repositories/graph.ts";
           } else if (url === "/api/repositories/files") {
-            routeFile = "./api/repositories/files.ts";
+            routeFile = "./api-src/repositories/files.ts";
           } else if (url === "/api/repositories/audit") {
-            routeFile = "./api/repositories/audit.ts";
+            routeFile = "./api-src/repositories/audit.ts";
           } else if (url === "/api/repositories/search") {
-            routeFile = "./api/repositories/search.ts";
+            routeFile = "./api-src/repositories/search.ts";
           } else if (url === "/api/chat" || url === "/api/chat/stream") {
-            routeFile = "./api/chat/index.ts";
+            routeFile = "./api-src/chat/index.ts";
           } else if (url === "/api/settings/providers" || url === "/api/settings/providers/test") {
-            routeFile = "./api/settings/providers.ts";
+            routeFile = "./api-src/settings/providers.ts";
           } else if (url === "/api/settings/models") {
-            routeFile = "./api/settings/models.ts";
+            routeFile = "./api-src/settings/models.ts";
           } else {
             res.statusCode = 404;
             return res.end(JSON.stringify({ error: `API route '${url}' not found` }));

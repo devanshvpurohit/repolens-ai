@@ -147,6 +147,7 @@ export class ApiClient {
     provider?: string;
     model?: string;
     apiKey?: string;
+    contextBlocks?: string[];
   }): Promise<ChatResponse> {
     return this.request<ChatResponse>("/api/chat", {
       method: "POST",
