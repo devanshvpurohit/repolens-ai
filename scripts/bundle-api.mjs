@@ -40,6 +40,15 @@ async function bundleAll() {
       external: ["pg"], // native driver optionally loaded
       sourcemap: false,
       minify: false,
+      banner: {
+        js: `import { createRequire as __createRequire } from "module";
+import { fileURLToPath as __fileURLToPath } from "url";
+import { dirname as __dirnameFunction } from "path";
+const require = __createRequire(import.meta.url);
+const __filename = __fileURLToPath(import.meta.url);
+const __dirname = __dirnameFunction(__filename);
+`,
+      },
     });
 
     console.log(`✓ Bundled ${route} -> api/${route.replace(/\.ts$/, ".js")}`);
