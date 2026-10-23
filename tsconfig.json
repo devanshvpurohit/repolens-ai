@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@repolens/graph-schema": ["packages/graph-schema/src/index.ts"],
+      "@repolens/github-ingestion": ["packages/github-ingestion/src/index.ts"],
+      "@repolens/analysis-adapter": ["packages/analysis-adapter/src/index.ts"],
+      "@repolens/ai-providers": ["packages/ai-providers/src/index.ts"],
+      "@repolens/retrieval": ["packages/retrieval/src/index.ts"],
+      "@repolens/shared": ["packages/shared/src/index.ts"]
+    }
+  },
+  "include": ["src", "api", "packages", "tests", "vite.config.ts"]
+}
