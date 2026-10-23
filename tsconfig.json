@@ -26,5 +26,5 @@
       "@repolens/shared": ["packages/shared/src/index.ts"]
     }
   },
-  "include": ["src", "api", "packages", "tests", "vite.config.ts"]
+  "include": ["src", "api-src", "packages", "tests", "vite.config.ts"]
 }
