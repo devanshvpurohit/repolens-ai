@@ -39,4 +39,5 @@ export interface AIProvider {
   defaultModel: string;
   generate(options: GenerateOptions): Promise<GenerateResult>;
   healthCheck(apiKey?: string): Promise<HealthCheckResult>;
+  listModels(apiKey?: string): Promise<string[]>;
 }

@@ -126,4 +126,34 @@ export class GeminiProvider implements AIProvider {
       };
     }
   }
+
+  async listModels(apiKey?: string): Promise<string[]> {
+    const key = apiKey || process.env.GEMINI_API_KEY;
+    if (!key) {
+      return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+    }
+
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData.error?.message || `Google Gemini API error (${res.status})`;
+        throw new Error(errMsg);
+      }
+      const data = (await res.json()) as any;
+      if (data.models && Array.isArray(data.models)) {
+        const models = data.models
+          .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
+          .map((m: any) => m.name.replace(/^models\//, ""))
+          .filter((name: string) => !name.includes("embedding") && !name.includes("aqa"));
+        if (models.length > 0) return models;
+      }
+      return [this.defaultModel];
+    } catch (err: any) {
+      if (apiKey) {
+        throw err;
+      }
+      return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+    }
+  }
 }

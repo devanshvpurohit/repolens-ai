@@ -3,6 +3,14 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
+// Load local environment files if present
+try {
+  process.loadEnvFile(".env.local");
+} catch {}
+try {
+  process.loadEnvFile(".env");
+} catch {}
+
 // Local dev middleware mapping /api/* to handlers
 function apiDevServerPlugin() {
   return {
@@ -29,12 +37,16 @@ function apiDevServerPlugin() {
             routeFile = "./api/repositories/graph.ts";
           } else if (url === "/api/repositories/files") {
             routeFile = "./api/repositories/files.ts";
+          } else if (url === "/api/repositories/audit") {
+            routeFile = "./api/repositories/audit.ts";
           } else if (url === "/api/repositories/search") {
             routeFile = "./api/repositories/search.ts";
           } else if (url === "/api/chat" || url === "/api/chat/stream") {
             routeFile = "./api/chat/index.ts";
           } else if (url === "/api/settings/providers" || url === "/api/settings/providers/test") {
             routeFile = "./api/settings/providers.ts";
+          } else if (url === "/api/settings/models") {
+            routeFile = "./api/settings/models.ts";
           } else {
             res.statusCode = 404;
             return res.end(JSON.stringify({ error: `API route '${url}' not found` }));

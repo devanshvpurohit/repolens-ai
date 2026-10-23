@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { ApiClient, type InspectResponse } from "@/lib/api-client";
+import { useRepoStore } from "@/stores/repo-store";
 import {
   GitBranch,
   Search,
@@ -10,11 +11,14 @@ import {
   FileCode,
   ArrowRight,
   Sparkles,
+  Key,
 } from "lucide-react";
 
 export function AnalyzePage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { byokKeys, activeProvider, openApiKeyModal } = useRepoStore();
+  const hasKey = !!byokKeys[activeProvider];
 
   const [repoUrl, setRepoUrl] = useState(searchParams.get("repo") || "");
   const [maxFiles, setMaxFiles] = useState(150);
@@ -107,6 +111,29 @@ export function AnalyzePage() {
               Input a repository URL to generate its AST knowledge graph and grounded Q&A index.
             </p>
           </div>
+        </div>
+
+        {/* API Key Status Notice */}
+        <div className="mb-5 p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <Key className={`w-4 h-4 ${hasKey ? "text-emerald-400" : "text-amber-400"}`} />
+            <span className="text-slate-300">
+              {hasKey
+                ? "AI API Key configured via browser storage."
+                : "No server .env required. Enter your free Gemini key to enable AI Q&A."}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={openApiKeyModal}
+            className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors shrink-0 ${
+              hasKey
+                ? "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                : "bg-blue-600 hover:bg-blue-500 text-white"
+            }`}
+          >
+            {hasKey ? "Change Key" : "Set API Key"}
+          </button>
         </div>
 
         {/* URL Form */}

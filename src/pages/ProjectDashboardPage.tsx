@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/repository/Sidebar";
 import { KnowledgeGraphView } from "@/components/graph/KnowledgeGraphView";
 import { NodeDetailPanel } from "@/components/repository/NodeDetailPanel";
 import { MonacoViewer } from "@/components/source-viewer/MonacoViewer";
+import { AuditPanel } from "@/components/repository/AuditPanel";
 import {
   Network,
   Code2,
@@ -13,13 +14,14 @@ import {
   AlertCircle,
   Sparkles,
   Maximize2,
+  ShieldAlert,
 } from "lucide-react";
 
 export function ProjectDashboardPage() {
   const { id } = useParams<{ id: string }>();
-  const { loadProject, isLoading, error, graph, metadata } = useRepoStore();
+  const { loadProject, isLoading, error, graph, metadata, auditReport } = useRepoStore();
 
-  const [activeCenterTab, setActiveCenterTab] = useState<"graph" | "split" | "code">("graph");
+  const [activeCenterTab, setActiveCenterTab] = useState<"graph" | "split" | "code" | "audit">("graph");
 
   useEffect(() => {
     if (id) {
@@ -90,6 +92,22 @@ export function ProjectDashboardPage() {
             <Code2 className="w-3.5 h-3.5" />
             Source Editor
           </button>
+          <button
+            onClick={() => setActiveCenterTab("audit")}
+            className={`px-3 py-1 rounded-md transition-colors flex items-center gap-1.5 ${
+              activeCenterTab === "audit"
+                ? "bg-slate-800 text-blue-400 font-medium"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-blue-400" />
+            <span>Code Audit</span>
+            {auditReport && auditReport.summary.totalIssues > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold">
+                {auditReport.summary.totalIssues}
+              </span>
+            )}
+          </button>
         </div>
 
         <Link
@@ -106,7 +124,7 @@ export function ProjectDashboardPage() {
         {/* Left Sidebar */}
         <Sidebar />
 
-        {/* Center Panel (Graph / Code / Split) */}
+        {/* Center Panel (Graph / Code / Split / Audit) */}
         <main className="flex-1 flex flex-col overflow-hidden bg-slate-950 relative">
           {activeCenterTab === "graph" && (
             <div className="w-full h-full">
@@ -128,6 +146,12 @@ export function ProjectDashboardPage() {
               <div className="flex-1 h-1/2 md:h-full">
                 <MonacoViewer />
               </div>
+            </div>
+          )}
+
+          {activeCenterTab === "audit" && (
+            <div className="w-full h-full">
+              <AuditPanel onNavigateToFile={() => setActiveCenterTab("split")} />
             </div>
           )}
         </main>

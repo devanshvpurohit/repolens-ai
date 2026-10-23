@@ -119,6 +119,16 @@ export class ApiClient {
     );
   }
 
+  static async auditRepo(
+    projectId: string,
+    options?: { useAi?: boolean; provider?: string; apiKey?: string }
+  ): Promise<any> {
+    return this.request<any>("/api/repositories/audit", {
+      method: "POST",
+      body: JSON.stringify({ projectId, ...options }),
+    });
+  }
+
   static async chat(data: {
     projectId: string;
     message: string;
@@ -138,6 +148,16 @@ export class ApiClient {
 
   static async testProvider(provider: string, apiKey?: string): Promise<any> {
     return this.request<any>("/api/settings/providers", {
+      method: "POST",
+      body: JSON.stringify({ provider, apiKey }),
+    });
+  }
+
+  static async getModels(
+    provider: string,
+    apiKey?: string
+  ): Promise<{ provider: string; models: string[]; defaultModel?: string }> {
+    return this.request<{ provider: string; models: string[]; defaultModel?: string }>("/api/settings/models", {
       method: "POST",
       body: JSON.stringify({ provider, apiKey }),
     });

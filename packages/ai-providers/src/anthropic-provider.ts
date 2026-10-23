@@ -94,4 +94,29 @@ export class AnthropicProvider implements AIProvider {
       return { ok: false, provider: "anthropic", message: err?.message || String(err) };
     }
   }
+
+  async listModels(apiKey?: string): Promise<string[]> {
+    const key = apiKey || process.env.ANTHROPIC_API_KEY;
+    if (!key) {
+      return [this.defaultModel, "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"];
+    }
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/models", {
+        headers: {
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+        },
+      });
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        if (data.data && Array.isArray(data.data)) {
+          return data.data.map((m: any) => m.id);
+        }
+      }
+      return [this.defaultModel, "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"];
+    } catch {
+      return [this.defaultModel, "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"];
+    }
+  }
 }

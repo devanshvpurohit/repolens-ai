@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Cpu,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 
 export function ChatPanel({ onCitationClick }: { onCitationClick?: (path: string, lines: [number, number]) => void }) {
@@ -19,9 +20,18 @@ export function ChatPanel({ onCitationClick }: { onCitationClick?: (path: string
     sendChatMessage,
     clearChat,
     activeProvider,
+    activeModel,
     setProvider,
+    setModel,
     loadFile,
+    byokKeys,
+    availableModels,
+    isFetchingModels,
+    fetchModelsForProvider,
+    openApiKeyModal,
   } = useRepoStore();
+
+  const currentModels = availableModels[activeProvider] || [];
 
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -65,19 +75,49 @@ export function ChatPanel({ onCitationClick }: { onCitationClick?: (path: string
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Provider selector */}
+          {/* Dropdown 1: Provider selector */}
           <div className="flex items-center gap-1.5 bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700/60 text-xs">
-            <Cpu className="w-3 h-3 text-cyan-400" />
+            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
             <select
               value={activeProvider}
               onChange={(e) => setProvider(e.target.value)}
               className="bg-transparent text-slate-200 focus:outline-none cursor-pointer text-xs"
+              title="Select AI Provider"
             >
-              <option value="gemini" className="bg-slate-900">Gemini 2.5 Flash (Free Tier)</option>
-              <option value="openai" className="bg-slate-900">OpenAI (gpt-4o-mini)</option>
-              <option value="anthropic" className="bg-slate-900">Claude (3.5 Sonnet)</option>
-              <option value="ollama" className="bg-slate-900">Ollama (Local/BYOK)</option>
+              <option value="gemini" className="bg-slate-900">Gemini (Free Tier)</option>
+              <option value="openai" className="bg-slate-900">OpenAI</option>
+              <option value="anthropic" className="bg-slate-900">Anthropic Claude</option>
+              <option value="ollama" className="bg-slate-900">Ollama</option>
             </select>
+          </div>
+
+          {/* Dropdown 2: Model list from API key */}
+          <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 px-2 py-1 rounded-md border border-slate-700/60 text-xs">
+            {isFetchingModels ? (
+              <Loader2 className="w-3 h-3 text-cyan-400 animate-spin shrink-0" />
+            ) : null}
+            <select
+              value={activeModel}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={isFetchingModels}
+              className="bg-transparent text-slate-200 focus:outline-none cursor-pointer text-xs font-mono max-w-[150px] truncate"
+              title={`Select Model (retrieved from API key: ${currentModels.length} models available)`}
+            >
+              {currentModels.map((m) => (
+                <option key={m} value={m} className="bg-slate-900">
+                  {m}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => fetchModelsForProvider(activeProvider)}
+              disabled={isFetchingModels}
+              className="text-slate-400 hover:text-cyan-300 p-0.5 rounded transition-colors"
+              title="Refresh models from API key"
+            >
+              <RefreshCw className={`w-3 h-3 ${isFetchingModels ? "animate-spin" : ""}`} />
+            </button>
           </div>
 
           <button
@@ -89,6 +129,24 @@ export function ChatPanel({ onCitationClick }: { onCitationClick?: (path: string
           </button>
         </div>
       </div>
+
+      {/* No API Key Helper Banner */}
+      {!byokKeys[activeProvider] && activeProvider !== "ollama" && (
+        <div className="mx-4 mt-3 p-3 rounded-xl bg-gradient-to-r from-blue-950/60 to-slate-900 border border-blue-500/30 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-slate-300">
+            <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span>
+              No server <code className="text-blue-300 font-mono">.env</code> needed! Add your free Gemini key to enable AI answers.
+            </span>
+          </div>
+          <button
+            onClick={openApiKeyModal}
+            className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium text-xs whitespace-nowrap shadow-sm shadow-blue-600/30 transition-colors"
+          >
+            Enter Free Key
+          </button>
+        </div>
+      )}
 
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">

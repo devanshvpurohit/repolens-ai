@@ -87,4 +87,20 @@ export class OllamaProvider implements AIProvider {
       return { ok: false, provider: "ollama", message: err?.message || String(err) };
     }
   }
+
+  async listModels(): Promise<string[]> {
+    try {
+      this.validateEndpoint(this.baseUrl);
+      const res = await fetch(`${this.baseUrl}/api/tags`);
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        if (data.models && Array.isArray(data.models)) {
+          return data.models.map((m: any) => m.name);
+        }
+      }
+      return [this.defaultModel, "llama3.2", "codellama", "mistral"];
+    } catch {
+      return [this.defaultModel, "llama3.2", "codellama", "mistral"];
+    }
+  }
 }

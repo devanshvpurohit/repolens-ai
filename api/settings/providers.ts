@@ -6,6 +6,7 @@ import { z } from "zod";
 const TestProviderSchema = z.object({
   provider: z.enum(["gemini", "openai", "anthropic", "ollama"]),
   apiKey: z.string().optional(),
+  action: z.enum(["test", "models"]).optional(),
 });
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -13,8 +14,23 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return sendJson(res, 200, { ok: true });
   }
 
-  // GET: List configured providers and default settings
+  // GET: List configured providers or query models
   if (req.method === "GET") {
+    const url = new URL(req.url || "/", "http://localhost");
+    const action = url.searchParams.get("action");
+    const providerParam = url.searchParams.get("provider") as ProviderId | null;
+    const apiKey = url.searchParams.get("apiKey") || undefined;
+
+    if (action === "models" && providerParam) {
+      try {
+        const provider = defaultProviderManager.getProvider(providerParam);
+        const models = await provider.listModels(apiKey);
+        return sendJson(res, 200, { provider: providerParam, models });
+      } catch (err: any) {
+        return sendJson(res, 400, { error: err.message });
+      }
+    }
+
     const list = defaultProviderManager.getAllProviders().map((p) => {
       let isConfigured = false;
       if (p.id === "gemini") isConfigured = !!process.env.GEMINI_API_KEY;
@@ -37,15 +53,20 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     });
   }
 
-  // POST: Test provider connectivity with optional BYOK key
+  // POST: Test provider connectivity with optional BYOK key or fetch models
   if (req.method === "POST") {
     try {
       const body = await parseJsonBody(req);
       const parsed = TestProviderSchema.parse(body);
 
       const provider = defaultProviderManager.getProvider(parsed.provider as ProviderId);
-      const health = await provider.healthCheck(parsed.apiKey);
 
+      if (parsed.action === "models") {
+        const models = await provider.listModels(parsed.apiKey);
+        return sendJson(res, 200, { provider: parsed.provider, models });
+      }
+
+      const health = await provider.healthCheck(parsed.apiKey);
       return sendJson(res, 200, health);
     } catch (err: any) {
       return sendJson(res, 400, {

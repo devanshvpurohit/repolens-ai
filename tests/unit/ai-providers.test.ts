@@ -37,4 +37,24 @@ describe("AI Providers - Adapters & Safety", () => {
     ).rejects.toThrow(/Local Ollama \(127.0.0.1\) cannot be accessed directly from a hosted Vercel function/);
     process.env.NODE_ENV = "test";
   });
+
+  it("Gemini provider listModels retrieves model list using API key", async () => {
+    const key = process.env.GEMINI_API_KEY;
+    const provider = new GeminiProvider();
+    if (key) {
+      const models = await provider.listModels(key);
+      expect(models.length).toBeGreaterThan(0);
+      expect(models.some((m) => m.includes("gemini"))).toBe(true);
+    } else {
+      const models = await provider.listModels();
+      expect(models.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("Provider listModels gracefully provides default model list if no key is provided", async () => {
+    delete process.env.GEMINI_API_KEY;
+    const provider = new GeminiProvider();
+    const models = await provider.listModels();
+    expect(models).toContain("gemini-2.5-flash");
+  });
 });

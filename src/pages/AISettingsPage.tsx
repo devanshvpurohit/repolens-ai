@@ -14,17 +14,33 @@ import {
 } from "lucide-react";
 
 export function AISettingsPage() {
-  const { activeProvider, setProvider, byokKeys, setByokKey } = useRepoStore();
+  const { activeProvider, activeModel, setProvider, setModel, byokKeys, setByokKey } = useRepoStore();
 
   const [providerList, setProviderList] = useState<any[]>([]);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; message: string }>>({});
+  const [providerModels, setProviderModels] = useState<Record<string, string[]>>({});
+  const [fetchingModelsFor, setFetchingModelsFor] = useState<string | null>(null);
 
   useEffect(() => {
     ApiClient.getProviderSettings().then((data) => {
       setProviderList(data.providers || []);
     });
   }, []);
+
+  const handleFetchModels = async (providerId: string) => {
+    setFetchingModelsFor(providerId);
+    try {
+      const res = await ApiClient.getModels(providerId, byokKeys[providerId]);
+      if (res.models && res.models.length > 0) {
+        setProviderModels((prev) => ({ ...prev, [providerId]: res.models }));
+      }
+    } catch (err: any) {
+      console.warn("Could not fetch models:", err);
+    } finally {
+      setFetchingModelsFor(null);
+    }
+  };
 
   const handleTestConnection = async (providerId: string) => {
     setTestingProvider(providerId);
@@ -98,17 +114,50 @@ export function AISettingsPage() {
           </div>
 
           <div className="pt-2">
-            <label className="block text-xs text-slate-400 mb-1">
-              Custom Gemini API Key (Optional BYOK Override):
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-slate-400">
+                Custom Gemini API Key (Optional BYOK Override):
+              </label>
+              <button
+                type="button"
+                onClick={() => handleFetchModels("gemini")}
+                disabled={fetchingModelsFor === "gemini"}
+                className="text-[11px] text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-1"
+              >
+                {fetchingModelsFor === "gemini" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                <span>Fetch Models with Key</span>
+              </button>
+            </div>
             <input
               type="password"
               placeholder="AIzaSy..."
               value={byokKeys["gemini"] || ""}
               onChange={(e) => setByokKey("gemini", e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 font-mono"
             />
           </div>
+
+          {providerModels["gemini"] && providerModels["gemini"].length > 0 && (
+            <div className="pt-1">
+              <label className="block text-xs text-slate-400 mb-1">
+                Available Models for this Key ({providerModels["gemini"].length} found):
+              </label>
+              <select
+                value={activeProvider === "gemini" ? activeModel : undefined}
+                onChange={(e) => {
+                  setProvider("gemini", e.target.value);
+                  setModel(e.target.value);
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+              >
+                {providerModels["gemini"].map((m) => (
+                  <option key={m} value={m}>
+                    {m} {m.includes("2.5-flash") ? "(Recommended • Free Tier)" : m.includes("flash") ? "(Fast • Free Tier)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {testResult["gemini"] && (
             <div
@@ -147,17 +196,48 @@ export function AISettingsPage() {
           </div>
 
           <div className="pt-2">
-            <label className="block text-xs text-slate-400 mb-1">
-              OpenAI API Key (BYOK):
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-slate-400">
+                OpenAI API Key (BYOK):
+              </label>
+              <button
+                type="button"
+                onClick={() => handleFetchModels("openai")}
+                disabled={fetchingModelsFor === "openai"}
+                className="text-[11px] text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-1"
+              >
+                {fetchingModelsFor === "openai" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                <span>Fetch Models with Key</span>
+              </button>
+            </div>
             <input
               type="password"
               placeholder="sk-..."
               value={byokKeys["openai"] || ""}
               onChange={(e) => setByokKey("openai", e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 font-mono"
             />
           </div>
+
+          {providerModels["openai"] && providerModels["openai"].length > 0 && (
+            <div className="pt-1">
+              <label className="block text-xs text-slate-400 mb-1">
+                Available Models ({providerModels["openai"].length} found):
+              </label>
+              <select
+                value={activeProvider === "openai" ? activeModel : undefined}
+                onChange={(e) => {
+                  setProvider("openai", e.target.value);
+                  setModel(e.target.value);
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+              >
+                {providerModels["openai"].map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {testResult["openai"] && (
             <div
@@ -196,17 +276,48 @@ export function AISettingsPage() {
           </div>
 
           <div className="pt-2">
-            <label className="block text-xs text-slate-400 mb-1">
-              Anthropic API Key (BYOK):
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-slate-400">
+                Anthropic API Key (BYOK):
+              </label>
+              <button
+                type="button"
+                onClick={() => handleFetchModels("anthropic")}
+                disabled={fetchingModelsFor === "anthropic"}
+                className="text-[11px] text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-1"
+              >
+                {fetchingModelsFor === "anthropic" ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                <span>Fetch Models with Key</span>
+              </button>
+            </div>
             <input
               type="password"
               placeholder="sk-ant-..."
               value={byokKeys["anthropic"] || ""}
               onChange={(e) => setByokKey("anthropic", e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-blue-500 font-mono"
             />
           </div>
+
+          {providerModels["anthropic"] && providerModels["anthropic"].length > 0 && (
+            <div className="pt-1">
+              <label className="block text-xs text-slate-400 mb-1">
+                Available Models ({providerModels["anthropic"].length} found):
+              </label>
+              <select
+                value={activeProvider === "anthropic" ? activeModel : undefined}
+                onChange={(e) => {
+                  setProvider("anthropic", e.target.value);
+                  setModel(e.target.value);
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+              >
+                {providerModels["anthropic"].map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {testResult["anthropic"] && (
             <div

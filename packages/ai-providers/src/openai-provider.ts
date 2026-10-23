@@ -81,4 +81,31 @@ export class OpenAIProvider implements AIProvider {
       return { ok: false, provider: "openai", message: err?.message || String(err) };
     }
   }
+
+  async listModels(apiKey?: string): Promise<string[]> {
+    const key = apiKey || process.env.OPENAI_API_KEY;
+    if (!key) {
+      return [this.defaultModel, "gpt-4o-mini", "gpt-4o", "o3-mini"];
+    }
+
+    try {
+      const res = await fetch("https://api.openai.com/v1/models", {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      if (!res.ok) {
+        throw new Error(`OpenAI API error (${res.status})`);
+      }
+      const data = (await res.json()) as any;
+      if (data.data && Array.isArray(data.data)) {
+        const models = data.data
+          .map((m: any) => m.id)
+          .filter((id: string) => id.includes("gpt") || id.startsWith("o1") || id.startsWith("o3"))
+          .sort();
+        if (models.length > 0) return models;
+      }
+      return [this.defaultModel];
+    } catch {
+      return [this.defaultModel, "gpt-4o-mini", "gpt-4o", "o3-mini"];
+    }
+  }
 }
