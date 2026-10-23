@@ -13,6 +13,7 @@ export interface AnalyzeResponse {
   status: string;
   progress: number;
   graph?: KnowledgeGraph;
+  metadata?: RepoMetadata;
   cached?: boolean;
 }
 

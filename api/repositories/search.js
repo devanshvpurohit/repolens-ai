@@ -5,6 +5,12 @@ const require = __createRequire(import.meta.url);
 const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __dirnameFunction(__filename);
 
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
 
 // packages/shared/src/demo-data.ts
 var DEMO_PROJECT_ID = "demo-express-react-app";
@@ -349,15 +355,69 @@ var MemoryStore = class {
   saveJob(job) {
     job.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
     this.jobs.set(job.id, job);
+    try {
+      if (typeof process !== "undefined" && process.platform) {
+        const fs = __require("fs");
+        fs.writeFileSync(`/tmp/repolens_job_${job.id}.json`, JSON.stringify(job));
+      }
+    } catch {
+    }
   }
   getJob(id) {
-    return this.jobs.get(id);
+    let job = this.jobs.get(id);
+    if (!job) {
+      try {
+        if (typeof process !== "undefined" && process.platform) {
+          const fs = __require("fs");
+          const tmpPath = `/tmp/repolens_job_${id}.json`;
+          if (fs.existsSync(tmpPath)) {
+            job = JSON.parse(fs.readFileSync(tmpPath, "utf-8"));
+            if (job) this.jobs.set(id, job);
+          }
+        }
+      } catch {
+      }
+    }
+    return job;
   }
   saveProject(project) {
     this.projects.set(project.id, project);
+    try {
+      if (typeof process !== "undefined" && process.platform) {
+        const fs = __require("fs");
+        const tmpPath = `/tmp/repolens_${project.id}.json`;
+        const serializedFiles = Array.from(project.files.entries());
+        fs.writeFileSync(
+          tmpPath,
+          JSON.stringify({
+            ...project,
+            files: serializedFiles
+          })
+        );
+      }
+    } catch {
+    }
   }
   getProject(id) {
-    return this.projects.get(id);
+    let project = this.projects.get(id);
+    if (!project) {
+      try {
+        if (typeof process !== "undefined" && process.platform) {
+          const fs = __require("fs");
+          const tmpPath = `/tmp/repolens_${id}.json`;
+          if (fs.existsSync(tmpPath)) {
+            const raw = JSON.parse(fs.readFileSync(tmpPath, "utf-8"));
+            project = {
+              ...raw,
+              files: new Map(raw.files || [])
+            };
+            if (project) this.projects.set(id, project);
+          }
+        }
+      } catch {
+      }
+    }
+    return project;
   }
   findProjectByRepo(owner, repo, commitSha) {
     for (const p of this.projects.values()) {

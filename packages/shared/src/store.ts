@@ -50,18 +50,68 @@ export class MemoryStore {
   saveJob(job: AnalysisJob): void {
     job.updatedAt = new Date().toISOString();
     this.jobs.set(job.id, job);
+    try {
+      if (typeof process !== "undefined" && process.platform) {
+        const fs = require("fs");
+        fs.writeFileSync(`/tmp/repolens_job_${job.id}.json`, JSON.stringify(job));
+      }
+    } catch {}
   }
 
   getJob(id: string): AnalysisJob | undefined {
-    return this.jobs.get(id);
+    let job = this.jobs.get(id);
+    if (!job) {
+      try {
+        if (typeof process !== "undefined" && process.platform) {
+          const fs = require("fs");
+          const tmpPath = `/tmp/repolens_job_${id}.json`;
+          if (fs.existsSync(tmpPath)) {
+            job = JSON.parse(fs.readFileSync(tmpPath, "utf-8"));
+            if (job) this.jobs.set(id, job);
+          }
+        }
+      } catch {}
+    }
+    return job;
   }
 
   saveProject(project: StoredProject): void {
     this.projects.set(project.id, project);
+    try {
+      if (typeof process !== "undefined" && process.platform) {
+        const fs = require("fs");
+        const tmpPath = `/tmp/repolens_${project.id}.json`;
+        const serializedFiles = Array.from(project.files.entries());
+        fs.writeFileSync(
+          tmpPath,
+          JSON.stringify({
+            ...project,
+            files: serializedFiles,
+          })
+        );
+      }
+    } catch {}
   }
 
   getProject(id: string): StoredProject | undefined {
-    return this.projects.get(id);
+    let project = this.projects.get(id);
+    if (!project) {
+      try {
+        if (typeof process !== "undefined" && process.platform) {
+          const fs = require("fs");
+          const tmpPath = `/tmp/repolens_${id}.json`;
+          if (fs.existsSync(tmpPath)) {
+            const raw = JSON.parse(fs.readFileSync(tmpPath, "utf-8"));
+            project = {
+              ...raw,
+              files: new Map(raw.files || []),
+            };
+            if (project) this.projects.set(id, project);
+          }
+        }
+      } catch {}
+    }
+    return project;
   }
 
   findProjectByRepo(owner: string, repo: string, commitSha?: string): StoredProject | undefined {

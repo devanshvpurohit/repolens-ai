@@ -22756,15 +22756,69 @@ var MemoryStore = class {
   saveJob(job) {
     job.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
     this.jobs.set(job.id, job);
+    try {
+      if (typeof process !== "undefined" && process.platform) {
+        const fs3 = __require("fs");
+        fs3.writeFileSync(`/tmp/repolens_job_${job.id}.json`, JSON.stringify(job));
+      }
+    } catch {
+    }
   }
   getJob(id) {
-    return this.jobs.get(id);
+    let job = this.jobs.get(id);
+    if (!job) {
+      try {
+        if (typeof process !== "undefined" && process.platform) {
+          const fs3 = __require("fs");
+          const tmpPath = `/tmp/repolens_job_${id}.json`;
+          if (fs3.existsSync(tmpPath)) {
+            job = JSON.parse(fs3.readFileSync(tmpPath, "utf-8"));
+            if (job) this.jobs.set(id, job);
+          }
+        }
+      } catch {
+      }
+    }
+    return job;
   }
   saveProject(project) {
     this.projects.set(project.id, project);
+    try {
+      if (typeof process !== "undefined" && process.platform) {
+        const fs3 = __require("fs");
+        const tmpPath = `/tmp/repolens_${project.id}.json`;
+        const serializedFiles = Array.from(project.files.entries());
+        fs3.writeFileSync(
+          tmpPath,
+          JSON.stringify({
+            ...project,
+            files: serializedFiles
+          })
+        );
+      }
+    } catch {
+    }
   }
   getProject(id) {
-    return this.projects.get(id);
+    let project = this.projects.get(id);
+    if (!project) {
+      try {
+        if (typeof process !== "undefined" && process.platform) {
+          const fs3 = __require("fs");
+          const tmpPath = `/tmp/repolens_${id}.json`;
+          if (fs3.existsSync(tmpPath)) {
+            const raw = JSON.parse(fs3.readFileSync(tmpPath, "utf-8"));
+            project = {
+              ...raw,
+              files: new Map(raw.files || [])
+            };
+            if (project) this.projects.set(id, project);
+          }
+        }
+      } catch {
+      }
+    }
+    return project;
   }
   findProjectByRepo(owner, repo, commitSha) {
     for (const p of this.projects.values()) {

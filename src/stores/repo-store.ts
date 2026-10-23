@@ -53,6 +53,7 @@ interface RepoState {
 
   // Actions
   setProjectId: (id: string) => void;
+  setProjectData: (id: string, graph: KnowledgeGraph, metadata: RepoMetadata) => void;
   loadProject: (id: string) => Promise<void>;
   selectNode: (node: GraphNode | null) => void;
   loadFile: (path: string, lineRange?: [number, number]) => Promise<void>;
@@ -126,7 +127,56 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
   setProjectId: (id) => set({ projectId: id }),
 
+  setProjectData: (id, graph, metadata) => {
+    set({
+      projectId: id,
+      graph,
+      metadata,
+      isLoading: false,
+      error: null,
+    });
+    try {
+      sessionStorage.setItem(`repolens_project_${id}`, JSON.stringify({ graph, metadata }));
+    } catch {}
+
+    const firstFile = graph.nodes.find((n) => n.type === "file");
+    if (firstFile && firstFile.filePath) {
+      get().loadFile(firstFile.filePath);
+    }
+    get().runAudit(id);
+  },
+
   loadProject: async (id) => {
+    // 1. If project data already in store, skip fetch
+    const current = get();
+    if (current.projectId === id && current.graph && current.metadata) {
+      return;
+    }
+
+    // 2. Check sessionStorage cache
+    try {
+      const cached = sessionStorage.getItem(`repolens_project_${id}`);
+      if (cached) {
+        const { graph, metadata } = JSON.parse(cached);
+        if (graph && metadata) {
+          set({
+            projectId: id,
+            graph,
+            metadata,
+            isLoading: false,
+            error: null,
+          });
+          const firstFile = graph.nodes.find((n: any) => n.type === "file");
+          if (firstFile && firstFile.filePath) {
+            get().loadFile(firstFile.filePath);
+          }
+          get().runAudit(id);
+          return;
+        }
+      }
+    } catch {}
+
+    // 3. Fallback to API
     set({ isLoading: true, error: null, projectId: id });
     try {
       const data = await ApiClient.getGraph(id);
@@ -135,6 +185,10 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         metadata: data.metadata,
         isLoading: false,
       });
+
+      try {
+        sessionStorage.setItem(`repolens_project_${id}`, JSON.stringify({ graph: data.graph, metadata: data.metadata }));
+      } catch {}
 
       // Default select the first file if available
       const firstFile = data.graph.nodes.find((n) => n.type === "file");

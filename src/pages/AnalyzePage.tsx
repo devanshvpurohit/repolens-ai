@@ -67,9 +67,12 @@ export function AnalyzePage() {
       if (res.status === "completed") {
         setProgressPercent(100);
         setProgressStage("Analysis completed successfully!");
+        if (res.graph && res.metadata) {
+          useRepoStore.getState().setProjectData(res.projectId, res.graph, res.metadata);
+        }
         setTimeout(() => {
           navigate(`/project/${res.projectId}`);
-        }, 600);
+        }, 300);
         return;
       }
 
