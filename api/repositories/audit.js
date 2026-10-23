@@ -51439,10 +51439,10 @@ var GeminiProvider = class {
   name = "Google Gemini";
   defaultModel;
   constructor(defaultModel) {
-    this.defaultModel = defaultModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    this.defaultModel = defaultModel || (typeof process !== "undefined" ? process.env?.GEMINI_MODEL : void 0) || "gemini-2.5-flash";
   }
   getClient(apiKey) {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const key = apiKey || (typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0);
     if (!key) {
       throw new Error(
         "Gemini API key is not configured. Please set GEMINI_API_KEY in your environment or provide a personal API key in settings."
@@ -51541,7 +51541,8 @@ var GeminiProvider = class {
     }
   }
   async listModels(apiKey) {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const envKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0;
+    const key = apiKey || envKey;
     if (!key) {
       return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
@@ -51931,12 +51932,21 @@ Provide:
 2. Architectural & State Management observations.
 3. Top 3-4 prioritized action items for the engineering team.
 Format clearly in Markdown.`;
-      const aiResponse = await provider.generate({
-        messages: [{ role: "user", content: prompt }],
-        apiKey,
-        maxOutputTokens: 500
-      });
-      report.aiExecutiveSummary = aiResponse.text;
+      const effectiveApiKey = apiKey || (typeof process !== "undefined" ? providerId === "gemini" ? process.env?.GEMINI_API_KEY : providerId === "openai" ? process.env?.OPENAI_API_KEY : process.env?.ANTHROPIC_API_KEY : void 0);
+      if (effectiveApiKey || providerId === "ollama") {
+        const aiResponse = await provider.generate({
+          messages: [{ role: "user", content: prompt }],
+          apiKey: effectiveApiKey,
+          maxOutputTokens: 500
+        });
+        report.aiExecutiveSummary = aiResponse.text;
+      } else {
+        report.aiExecutiveSummary = `### Security & Quality Overview for **${project.name}**
+
+- **Health Score**: ${report.summary.codeHealthScore}/100 (Grade: **${report.summary.healthGrade}**)
+- **Findings**: Discovered ${report.summary.totalIssues} total static items (${report.summary.high} high severity, ${report.summary.medium} medium).
+- **Readiness**: Evaluated via deterministic static security checks.`;
+      }
     } catch (e2) {
       console.warn("Could not enrich audit report with AI summary:", e2.message);
     }

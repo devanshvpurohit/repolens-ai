@@ -62,12 +62,26 @@ Provide:
 3. Top 3-4 prioritized action items for the engineering team.
 Format clearly in Markdown.`;
 
-      const aiResponse = await provider.generate({
-        messages: [{ role: "user", content: prompt }],
-        apiKey,
-        maxOutputTokens: 500,
-      });
-      report.aiExecutiveSummary = aiResponse.text;
+      const effectiveApiKey =
+        apiKey ||
+        (typeof process !== "undefined"
+          ? providerId === "gemini"
+            ? process.env?.GEMINI_API_KEY
+            : providerId === "openai"
+            ? process.env?.OPENAI_API_KEY
+            : process.env?.ANTHROPIC_API_KEY
+          : undefined);
+
+      if (effectiveApiKey || providerId === "ollama") {
+        const aiResponse = await provider.generate({
+          messages: [{ role: "user", content: prompt }],
+          apiKey: effectiveApiKey,
+          maxOutputTokens: 500,
+        });
+        report.aiExecutiveSummary = aiResponse.text;
+      } else {
+        report.aiExecutiveSummary = `### Security & Quality Overview for **${project.name}**\n\n- **Health Score**: ${report.summary.codeHealthScore}/100 (Grade: **${report.summary.healthGrade}**)\n- **Findings**: Discovered ${report.summary.totalIssues} total static items (${report.summary.high} high severity, ${report.summary.medium} medium).\n- **Readiness**: Evaluated via deterministic static security checks.`;
+      }
     } catch (e: any) {
       console.warn("Could not enrich audit report with AI summary:", e.message);
     }

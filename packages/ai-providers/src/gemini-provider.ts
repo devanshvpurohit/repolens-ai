@@ -7,11 +7,11 @@ export class GeminiProvider implements AIProvider {
   readonly defaultModel: string;
 
   constructor(defaultModel?: string) {
-    this.defaultModel = defaultModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    this.defaultModel = defaultModel || (typeof process !== "undefined" ? process.env?.GEMINI_MODEL : undefined) || "gemini-2.5-flash";
   }
 
   private getClient(apiKey?: string): GoogleGenAI {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const key = apiKey || (typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : undefined);
     if (!key) {
       throw new Error(
         "Gemini API key is not configured. Please set GEMINI_API_KEY in your environment or provide a personal API key in settings."
@@ -128,7 +128,8 @@ export class GeminiProvider implements AIProvider {
   }
 
   async listModels(apiKey?: string): Promise<string[]> {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const envKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : undefined;
+    const key = apiKey || envKey;
     if (!key) {
       return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
     }

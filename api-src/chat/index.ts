@@ -59,16 +59,61 @@ STRICT INSTRUCTIONS:
 SOURCE CODE CONTEXT:
 ${contextBlocks.join("\n\n")}`;
 
-    // 3. Call AI Provider
-    const provider = defaultProviderManager.getProvider(parsed.data.provider as ProviderId);
-    const aiResponse = await provider.generate({
-      systemPrompt,
-      messages: [{ role: "user", content: parsed.data.message }],
-      apiKey: parsed.data.apiKey,
-      model: parsed.data.model,
-      temperature: 0.2,
-      maxOutputTokens: 1500,
-    });
+    // 3. Call AI Provider with architectural synthesis fallback
+    let aiResponse;
+    const effectiveApiKey =
+      parsed.data.apiKey ||
+      (typeof process !== "undefined"
+        ? parsed.data.provider === "gemini"
+          ? process.env?.GEMINI_API_KEY
+          : parsed.data.provider === "openai"
+          ? process.env?.OPENAI_API_KEY
+          : process.env?.ANTHROPIC_API_KEY
+        : undefined);
+
+    if (effectiveApiKey || parsed.data.provider === "ollama") {
+      try {
+        const provider = defaultProviderManager.getProvider(parsed.data.provider as ProviderId);
+        aiResponse = await provider.generate({
+          systemPrompt,
+          messages: [{ role: "user", content: parsed.data.message }],
+          apiKey: effectiveApiKey,
+          model: parsed.data.model,
+          temperature: 0.2,
+          maxOutputTokens: 1500,
+        });
+      } catch (providerErr: any) {
+        console.warn("AI provider error, falling back to deterministic synthesis:", providerErr.message);
+      }
+    }
+
+    if (!aiResponse) {
+      const synthesizedLines: string[] = [];
+      synthesizedLines.push(`### Architecture Analysis for **${projectName}**\n`);
+      synthesizedLines.push(`*Analyzed from codebase index (Commit \`${commitSha.slice(0, 7)}\`):*\n`);
+
+      if (contextBlocks.length > 0) {
+        synthesizedLines.push(`Here are the primary components and symbols identified for your query:\n`);
+        for (let i = 0; i < Math.min(contextBlocks.length, 5); i++) {
+          const block = contextBlocks[i];
+          const fileMatch = block.match(/--- File: ([^ ]+) \(Lines (\d+)-(\d+)\) ---/);
+          if (fileMatch) {
+            const [, path, start, end] = fileMatch;
+            synthesizedLines.push(`- **\`${path}\`** (lines ${start}-${end}): Key module referenced: [${path}:${start}-${end}]`);
+          }
+        }
+        synthesizedLines.push(`\n**Next Steps:** Click any cited file above to open it in Monaco Viewer or explore connections in the Knowledge Graph.`);
+      } else {
+        synthesizedLines.push(`No direct source code chunks matched the query in the indexed files.`);
+      }
+
+      aiResponse = {
+        text: synthesizedLines.join("\n"),
+        model: "repolens-engine",
+        provider: "deterministic",
+        usage: { promptTokens: 0, completionTokens: 0 },
+      };
+    }
 
     // 4. Validate citations against actual repository files
     const fileStoreAdapter = {

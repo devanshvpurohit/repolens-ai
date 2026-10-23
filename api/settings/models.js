@@ -46426,10 +46426,10 @@ var GeminiProvider = class {
   name = "Google Gemini";
   defaultModel;
   constructor(defaultModel) {
-    this.defaultModel = defaultModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    this.defaultModel = defaultModel || (typeof process !== "undefined" ? process.env?.GEMINI_MODEL : void 0) || "gemini-2.5-flash";
   }
   getClient(apiKey) {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const key = apiKey || (typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0);
     if (!key) {
       throw new Error(
         "Gemini API key is not configured. Please set GEMINI_API_KEY in your environment or provide a personal API key in settings."
@@ -46528,7 +46528,8 @@ var GeminiProvider = class {
     }
   }
   async listModels(apiKey) {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const envKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0;
+    const key = apiKey || envKey;
     if (!key) {
       return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
@@ -51434,17 +51435,24 @@ async function handler(req, res) {
     } else {
       return sendJson(res, 405, { error: "Method not allowed." });
     }
+    if (!apiKey) {
+      if (providerId === "gemini") apiKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0;
+      if (providerId === "openai") apiKey = typeof process !== "undefined" ? process.env?.OPENAI_API_KEY : void 0;
+      if (providerId === "anthropic") apiKey = typeof process !== "undefined" ? process.env?.ANTHROPIC_API_KEY : void 0;
+    }
     const provider = defaultProviderManager.getProvider(providerId);
     let models = [];
     try {
       models = await provider.listModels(apiKey);
-    } catch (err) {
-      console.warn("Could not retrieve models for provider:", err.message);
-      models = [provider.defaultModel];
+    } catch {
+      models = [
+        provider.defaultModel,
+        providerId === "gemini" ? "gemini-2.5-flash" : providerId === "openai" ? "gpt-4o-mini" : "claude-3-5-sonnet"
+      ];
     }
     return sendJson(res, 200, {
       provider: providerId,
-      models,
+      models: models.length > 0 ? models : [provider.defaultModel],
       defaultModel: provider.defaultModel
     });
   } catch (err) {

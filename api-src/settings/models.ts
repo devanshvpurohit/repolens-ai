@@ -32,18 +32,26 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return sendJson(res, 405, { error: "Method not allowed." });
     }
 
+    if (!apiKey) {
+      if (providerId === "gemini") apiKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : undefined;
+      if (providerId === "openai") apiKey = typeof process !== "undefined" ? process.env?.OPENAI_API_KEY : undefined;
+      if (providerId === "anthropic") apiKey = typeof process !== "undefined" ? process.env?.ANTHROPIC_API_KEY : undefined;
+    }
+
     const provider = defaultProviderManager.getProvider(providerId);
     let models: string[] = [];
     try {
       models = await provider.listModels(apiKey);
-    } catch (err: any) {
-      console.warn("Could not retrieve models for provider:", err.message);
-      models = [provider.defaultModel];
+    } catch {
+      models = [
+        provider.defaultModel,
+        providerId === "gemini" ? "gemini-2.5-flash" : providerId === "openai" ? "gpt-4o-mini" : "claude-3-5-sonnet"
+      ];
     }
 
     return sendJson(res, 200, {
       provider: providerId,
-      models,
+      models: models.length > 0 ? models : [provider.defaultModel],
       defaultModel: provider.defaultModel,
     });
   } catch (err: any) {

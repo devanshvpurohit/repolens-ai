@@ -46426,10 +46426,10 @@ var GeminiProvider = class {
   name = "Google Gemini";
   defaultModel;
   constructor(defaultModel) {
-    this.defaultModel = defaultModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    this.defaultModel = defaultModel || (typeof process !== "undefined" ? process.env?.GEMINI_MODEL : void 0) || "gemini-2.5-flash";
   }
   getClient(apiKey) {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const key = apiKey || (typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0);
     if (!key) {
       throw new Error(
         "Gemini API key is not configured. Please set GEMINI_API_KEY in your environment or provide a personal API key in settings."
@@ -46528,7 +46528,8 @@ var GeminiProvider = class {
     }
   }
   async listModels(apiKey) {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const envKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0;
+    const key = apiKey || envKey;
     if (!key) {
       return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
@@ -51580,15 +51581,52 @@ STRICT INSTRUCTIONS:
 
 SOURCE CODE CONTEXT:
 ${contextBlocks.join("\n\n")}`;
-    const provider = defaultProviderManager.getProvider(parsed.data.provider);
-    const aiResponse = await provider.generate({
-      systemPrompt,
-      messages: [{ role: "user", content: parsed.data.message }],
-      apiKey: parsed.data.apiKey,
-      model: parsed.data.model,
-      temperature: 0.2,
-      maxOutputTokens: 1500
-    });
+    let aiResponse;
+    const effectiveApiKey = parsed.data.apiKey || (typeof process !== "undefined" ? parsed.data.provider === "gemini" ? process.env?.GEMINI_API_KEY : parsed.data.provider === "openai" ? process.env?.OPENAI_API_KEY : process.env?.ANTHROPIC_API_KEY : void 0);
+    if (effectiveApiKey || parsed.data.provider === "ollama") {
+      try {
+        const provider = defaultProviderManager.getProvider(parsed.data.provider);
+        aiResponse = await provider.generate({
+          systemPrompt,
+          messages: [{ role: "user", content: parsed.data.message }],
+          apiKey: effectiveApiKey,
+          model: parsed.data.model,
+          temperature: 0.2,
+          maxOutputTokens: 1500
+        });
+      } catch (providerErr) {
+        console.warn("AI provider error, falling back to deterministic synthesis:", providerErr.message);
+      }
+    }
+    if (!aiResponse) {
+      const synthesizedLines = [];
+      synthesizedLines.push(`### Architecture Analysis for **${projectName}**
+`);
+      synthesizedLines.push(`*Analyzed from codebase index (Commit \`${commitSha.slice(0, 7)}\`):*
+`);
+      if (contextBlocks.length > 0) {
+        synthesizedLines.push(`Here are the primary components and symbols identified for your query:
+`);
+        for (let i2 = 0; i2 < Math.min(contextBlocks.length, 5); i2++) {
+          const block = contextBlocks[i2];
+          const fileMatch = block.match(/--- File: ([^ ]+) \(Lines (\d+)-(\d+)\) ---/);
+          if (fileMatch) {
+            const [, path2, start, end] = fileMatch;
+            synthesizedLines.push(`- **\`${path2}\`** (lines ${start}-${end}): Key module referenced: [${path2}:${start}-${end}]`);
+          }
+        }
+        synthesizedLines.push(`
+**Next Steps:** Click any cited file above to open it in Monaco Viewer or explore connections in the Knowledge Graph.`);
+      } else {
+        synthesizedLines.push(`No direct source code chunks matched the query in the indexed files.`);
+      }
+      aiResponse = {
+        text: synthesizedLines.join("\n"),
+        model: "repolens-engine",
+        provider: "deterministic",
+        usage: { promptTokens: 0, completionTokens: 0 }
+      };
+    }
     const fileStoreAdapter = {
       getFile: (path2) => {
         const file = project?.files?.get(path2);

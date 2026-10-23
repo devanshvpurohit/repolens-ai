@@ -46426,10 +46426,10 @@ var GeminiProvider = class {
   name = "Google Gemini";
   defaultModel;
   constructor(defaultModel) {
-    this.defaultModel = defaultModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    this.defaultModel = defaultModel || (typeof process !== "undefined" ? process.env?.GEMINI_MODEL : void 0) || "gemini-2.5-flash";
   }
   getClient(apiKey) {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const key = apiKey || (typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0);
     if (!key) {
       throw new Error(
         "Gemini API key is not configured. Please set GEMINI_API_KEY in your environment or provide a personal API key in settings."
@@ -46528,7 +46528,8 @@ var GeminiProvider = class {
     }
   }
   async listModels(apiKey) {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const envKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0;
+    const key = apiKey || envKey;
     if (!key) {
       return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
     }

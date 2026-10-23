@@ -363,11 +363,6 @@ export const useRepoStore = create<RepoState>((set, get) => ({
     const { projectId, activeProvider, activeModel, byokKeys, chatMessages, chunksCache, graph } = get();
     if (!projectId) return;
 
-    // If activeProvider is not ollama and no key is provided, prompt the modal immediately
-    if (activeProvider !== "ollama" && !byokKeys[activeProvider]) {
-      get().openApiKeyModal();
-    }
-
     const userMsg: ChatMessageItem = {
       id: `user-${Date.now()}`,
       role: "user",
