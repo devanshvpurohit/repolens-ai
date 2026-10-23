@@ -23,15 +23,23 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       apiKey = url.searchParams.get("apiKey") || undefined;
     } else if (req.method === "POST") {
       const body = await parseJsonBody(req);
-      const parsed = FetchModelsSchema.parse(body);
-      providerId = parsed.provider;
-      apiKey = parsed.apiKey;
+      const parsed = FetchModelsSchema.safeParse(body);
+      if (parsed.success) {
+        providerId = parsed.data.provider;
+        apiKey = parsed.data.apiKey;
+      }
     } else {
       return sendJson(res, 405, { error: "Method not allowed." });
     }
 
     const provider = defaultProviderManager.getProvider(providerId);
-    const models = await provider.listModels(apiKey);
+    let models: string[] = [];
+    try {
+      models = await provider.listModels(apiKey);
+    } catch (err: any) {
+      console.warn("Could not retrieve models for provider:", err.message);
+      models = [provider.defaultModel];
+    }
 
     return sendJson(res, 200, {
       provider: providerId,

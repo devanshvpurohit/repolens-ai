@@ -23,10 +23,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   try {
     const body = await parseJsonBody(req);
-    const parsed = AnalyzeSchema.parse(body);
+    const parsed = AnalyzeSchema.safeParse(body);
+    if (!parsed.success) {
+      return sendJson(res, 400, { error: parsed.error.errors[0]?.message || "Invalid repository URL" });
+    }
 
     const client = new GitHubClient();
-    const meta = await client.resolveRepository(parsed.repoUrl);
+    const meta = await client.resolveRepository(parsed.data.repoUrl);
 
     const projectId = `${meta.owner}-${meta.repo}-${meta.commitSha.slice(0, 7)}`;
     const jobId = `job-${projectId}`;
@@ -46,7 +49,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     // Initialize or update job
     const job: AnalysisJob = {
       id: jobId,
-      repoUrl: parsed.repoUrl,
+      repoUrl: parsed.data.repoUrl,
       owner: meta.owner,
       repo: meta.repo,
       commitSha: meta.commitSha,
@@ -61,7 +64,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     store.saveJob(job);
 
     // 1. Fetch file tree
-    const tree = await client.fetchFilteredTree(meta, { maxFiles: parsed.maxFiles });
+    const tree = await client.fetchFilteredTree(meta, { maxFiles: parsed.data.maxFiles });
     job.totalFiles = tree.length;
     job.status = "scanning";
     job.progress = 40;
@@ -113,7 +116,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       owner: meta.owner,
       repo: meta.repo,
       commitSha: meta.commitSha,
-      repoUrl: parsed.repoUrl,
+      repoUrl: parsed.data.repoUrl,
       metadata: meta,
       graph,
       files: filesMap,

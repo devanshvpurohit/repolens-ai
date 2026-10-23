@@ -17,10 +17,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   try {
     const body = await parseJsonBody(req);
-    const parsed = InspectSchema.parse(body);
+    const parsed = InspectSchema.safeParse(body);
+    if (!parsed.success) {
+      return sendJson(res, 400, { error: parsed.error.errors[0]?.message || "Invalid repository URL" });
+    }
 
     const client = new GitHubClient();
-    const meta = await client.resolveRepository(parsed.repoUrl);
+    const meta = await client.resolveRepository(parsed.data.repoUrl);
     const tree = await client.fetchFilteredTree(meta, { maxFiles: 500 });
 
     return sendJson(res, 200, {

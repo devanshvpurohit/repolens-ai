@@ -57,16 +57,22 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (req.method === "POST") {
     try {
       const body = await parseJsonBody(req);
-      const parsed = TestProviderSchema.parse(body);
-
-      const provider = defaultProviderManager.getProvider(parsed.provider as ProviderId);
-
-      if (parsed.action === "models") {
-        const models = await provider.listModels(parsed.apiKey);
-        return sendJson(res, 200, { provider: parsed.provider, models });
+      const parsed = TestProviderSchema.safeParse(body);
+      if (!parsed.success) {
+        return sendJson(res, 400, {
+          ok: false,
+          message: parsed.error.errors[0]?.message || "Invalid request payload",
+        });
       }
 
-      const health = await provider.healthCheck(parsed.apiKey);
+      const provider = defaultProviderManager.getProvider(parsed.data.provider as ProviderId);
+
+      if (parsed.data.action === "models") {
+        const models = await provider.listModels(parsed.data.apiKey);
+        return sendJson(res, 200, { provider: parsed.data.provider, models });
+      }
+
+      const health = await provider.healthCheck(parsed.data.apiKey);
       return sendJson(res, 200, health);
     } catch (err: any) {
       return sendJson(res, 400, {

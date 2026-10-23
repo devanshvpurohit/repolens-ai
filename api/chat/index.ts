@@ -23,18 +23,21 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   try {
     const body = await parseJsonBody(req);
-    const parsed = ChatRequestSchema.parse(body);
+    const parsed = ChatRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return sendJson(res, 400, { error: parsed.error.errors[0]?.message || "Invalid chat request" });
+    }
 
     const store = getRepositoryStore();
-    const project = store.getProject(parsed.projectId);
+    const project = store.getProject(parsed.data.projectId);
 
     if (!project) {
-      return sendJson(res, 404, { error: `Project '${parsed.projectId}' not found.` });
+      return sendJson(res, 404, { error: `Project '${parsed.data.projectId}' not found.` });
     }
 
     // 1. Retrieve top-k relevant source chunks
     const retriever = new RepositoryRetriever(project.chunks, project.graph);
-    const results = retriever.search(parsed.message, 6);
+    const results = retriever.search(parsed.data.message, 6);
 
     // 2. Assemble grounded context with strict token budget
     const contextBlocks = results.map((r, idx) => {
@@ -54,12 +57,12 @@ SOURCE CODE CONTEXT:
 ${contextBlocks.join("\n\n")}`;
 
     // 3. Call AI Provider
-    const provider = defaultProviderManager.getProvider(parsed.provider as ProviderId);
+    const provider = defaultProviderManager.getProvider(parsed.data.provider as ProviderId);
     const aiResponse = await provider.generate({
       systemPrompt,
-      messages: [{ role: "user", content: parsed.message }],
-      apiKey: parsed.apiKey,
-      model: parsed.model,
+      messages: [{ role: "user", content: parsed.data.message }],
+      apiKey: parsed.data.apiKey,
+      model: parsed.data.model,
       temperature: 0.2,
       maxOutputTokens: 1500,
     });
