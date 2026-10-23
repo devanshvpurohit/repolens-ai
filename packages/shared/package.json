@@ -1,0 +1,13 @@
+{
+  "name": "@repolens/shared",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@repolens/graph-schema": "workspace:*",
+    "@repolens/github-ingestion": "workspace:*",
+    "@repolens/retrieval": "workspace:*",
+    "pg": "^8.13.3"
+  }
+}

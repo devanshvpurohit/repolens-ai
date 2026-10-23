@@ -67,18 +67,29 @@ export class ApiClient {
       },
     });
 
+    // Safely read response text once to prevent "body stream already read"
+    const text = await res.text();
+
     if (!res.ok) {
       let errMsg = `Request failed (${res.status})`;
       try {
-        const data = await res.json();
+        const data = JSON.parse(text);
         errMsg = data.error || data.message || errMsg;
       } catch {
-        errMsg = await res.text();
+        if (text && text.length < 300) {
+          errMsg = text;
+        } else if (text) {
+          errMsg = `Server error (${res.status}): ${res.statusText || "Internal Server Error"}`;
+        }
       }
       throw new Error(errMsg);
     }
 
-    return res.json() as Promise<T>;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return text as unknown as T;
+    }
   }
 
   static async inspectRepo(repoUrl: string): Promise<InspectResponse> {
