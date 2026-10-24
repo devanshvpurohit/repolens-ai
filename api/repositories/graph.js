@@ -748,10 +748,11 @@ var GitHubClient = class {
       throw new Error(`Failed to fetch file content for '${path}' (${res.status})`);
     }
     const content = await res.text();
+    const sizeBytes = typeof Buffer !== "undefined" ? Buffer.byteLength(content, "utf8") : new TextEncoder().encode(content).length;
     return {
       path,
       content,
-      sizeBytes: Buffer.byteLength(content, "utf8"),
+      sizeBytes,
       sha: meta.commitSha
     };
   }
@@ -5440,6 +5441,10 @@ async function handler(req, res) {
     return sendJson(res, 200, { projects: list });
   }
   let project = store.getProject(id);
+  if (!project && (id === "demo-express-react-app" || id === "demo")) {
+    project = getDemoProject();
+    store.saveProject(project);
+  }
   if (!project) {
     const match = id.match(/^([a-zA-Z0-9_.-]+)-([a-zA-Z0-9_.-]+)-([a-zA-Z0-9]+)$/);
     if (match) {

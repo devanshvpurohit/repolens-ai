@@ -478,7 +478,11 @@ async function handler(req, res) {
     return sendJson(res, 400, { error: "Both 'id' and 'path' query parameters are required." });
   }
   const store = getRepositoryStore();
-  const project = store.getProject(id);
+  let project = store.getProject(id);
+  if (!project && (id === "demo-express-react-app" || id === "demo")) {
+    project = getDemoProject();
+    store.saveProject(project);
+  }
   const file = project?.files?.get(path);
   if (file) {
     return sendJson(res, 200, {

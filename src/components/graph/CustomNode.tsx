@@ -58,7 +58,9 @@ const TYPE_CONFIG: Record<
 };
 
 export const CustomNode = memo(({ data, selected }: any) => {
-  const node = data.node as GraphNode;
+  const node = data?.node as GraphNode;
+  if (!node) return null;
+
   const config = TYPE_CONFIG[node.type] || TYPE_CONFIG.file;
   const Icon = config.icon;
 

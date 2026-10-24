@@ -129,13 +129,13 @@ export class GeminiProvider implements AIProvider {
 
   async listModels(apiKey?: string): Promise<string[]> {
     const envKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : undefined;
-    const key = apiKey || envKey;
-    if (!key) {
-      return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+    const rawKey = (apiKey || envKey || "").trim();
+    if (!rawKey) {
+      return [this.defaultModel, "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
 
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(rawKey)}`);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         const errMsg = errData.error?.message || `Google Gemini API error (${res.status})`;
@@ -147,14 +147,36 @@ export class GeminiProvider implements AIProvider {
           .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
           .map((m: any) => m.name.replace(/^models\//, ""))
           .filter((name: string) => !name.includes("embedding") && !name.includes("aqa"));
-        if (models.length > 0) return models;
+        
+        if (models.length > 0) {
+          const priority = [
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-exp",
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-8b",
+            "gemini-1.5-pro",
+          ];
+
+          models.sort((a: string, b: string) => {
+            const indexA = priority.indexOf(a);
+            const indexB = priority.indexOf(b);
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+            return a.localeCompare(b);
+          });
+
+          return models;
+        }
       }
       return [this.defaultModel];
     } catch (err: any) {
       if (apiKey) {
         throw err;
       }
-      return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+      return [this.defaultModel, "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
   }
 }

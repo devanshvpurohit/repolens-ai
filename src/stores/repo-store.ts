@@ -7,6 +7,8 @@ import type { SourceChunk } from "@repolens/retrieval";
 import { RepositoryRetriever } from "@repolens/retrieval";
 import { ApiClient } from "@/lib/api-client";
 import { ClientAnalyzer } from "@/services/client-analyzer";
+import { ClientModelFetcher } from "@/services/client-model-fetcher";
+import { getDemoProject } from "@repolens/shared";
 
 export interface ChatMessageItem {
   id: string;
@@ -157,14 +159,46 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       error: null,
     });
 
+    // 1. Save metadata & graph to localStorage (small footprint, survives tab closes/refreshes)
+    try {
+      const summary = {
+        id,
+        name: metadata.name,
+        owner: metadata.owner,
+        repo: metadata.repo,
+        commitSha: metadata.commitSha,
+        metadata,
+        graph,
+        createdAt: new Date().toISOString(),
+      };
+      localStorage.setItem(`repolens_meta_${id}`, JSON.stringify(summary));
+
+      // Update recent projects list for ProjectsListPage
+      const existingListJson = localStorage.getItem("repolens_recent_projects");
+      const existingList = existingListJson ? JSON.parse(existingListJson) : [];
+      const updatedList = [
+        summary,
+        ...existingList.filter((p: any) => p.id !== id),
+      ].slice(0, 25);
+      localStorage.setItem("repolens_recent_projects", JSON.stringify(updatedList));
+
+      // Save exact repo URL for deterministic re-analysis if needed
+      if (metadata.owner && metadata.repo) {
+        localStorage.setItem(`repolens_repo_url_${id}`, `https://github.com/${metadata.owner}/${metadata.repo}`);
+      }
+    } catch (e) {
+      console.warn("Could not write project to localStorage:", e);
+    }
+
+    // 2. Cache sample files in sessionStorage safely
     try {
       sessionStorage.setItem(
         `repolens_project_${id}`,
         JSON.stringify({
           graph,
           metadata,
-          files: Array.from(filesMap.entries()),
-          chunks: chunksArr,
+          files: Array.from(filesMap.entries()).slice(0, 40),
+          chunks: chunksArr.slice(0, 100),
         })
       );
     } catch {}
@@ -183,7 +217,24 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       return;
     }
 
-    // 2. Check sessionStorage cache
+    // 2. Instant Demo Project support (zero network delay)
+    if (id === "demo-express-react-app" || id === "demo") {
+      const demo = getDemoProject();
+      const filesMap = new Map<string, string>();
+      for (const [path, file] of demo.files.entries()) {
+        filesMap.set(path, file.content);
+      }
+      get().setProjectData(
+        demo.id,
+        demo.graph,
+        demo.metadata,
+        filesMap,
+        demo.chunks
+      );
+      return;
+    }
+
+    // 3. Check sessionStorage cache
     try {
       const cached = sessionStorage.getItem(`repolens_project_${id}`);
       if (cached) {
@@ -209,7 +260,30 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       }
     } catch {}
 
-    // 3. Fallback to server API
+    // 4. Check localStorage meta cache
+    try {
+      const metaCached = localStorage.getItem(`repolens_meta_${id}`);
+      if (metaCached) {
+        const parsed = JSON.parse(metaCached);
+        if (parsed.graph && parsed.metadata) {
+          set({
+            projectId: id,
+            graph: parsed.graph,
+            metadata: parsed.metadata,
+            isLoading: false,
+            error: null,
+          });
+          const firstFile = parsed.graph.nodes.find((n: any) => n.type === "file");
+          if (firstFile && firstFile.filePath) {
+            get().loadFile(firstFile.filePath);
+          }
+          get().runAudit(id);
+          return;
+        }
+      }
+    } catch {}
+
+    // 5. Fallback to server API
     set({ isLoading: true, error: null, projectId: id });
     try {
       const data = await ApiClient.getGraph(id);
@@ -219,13 +293,6 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         isLoading: false,
       });
 
-      try {
-        sessionStorage.setItem(
-          `repolens_project_${id}`,
-          JSON.stringify({ graph: data.graph, metadata: data.metadata })
-        );
-      } catch {}
-
       const firstFile = data.graph.nodes.find((n) => n.type === "file");
       if (firstFile && firstFile.filePath) {
         get().loadFile(firstFile.filePath);
@@ -234,12 +301,25 @@ export const useRepoStore = create<RepoState>((set, get) => ({
       get().runAudit(id);
       return;
     } catch {
-      // 4. On-demand client-side fallback if server lacks project in memory
-      const match = id.match(/^([a-zA-Z0-9_.-]+)-([a-zA-Z0-9_.-]+)-([a-zA-Z0-9]+)$/);
-      if (match) {
+      // 6. On-demand client-side fallback
+      let targetRepoUrl = localStorage.getItem(`repolens_repo_url_${id}`);
+      if (!targetRepoUrl) {
+        // Robust ID parsing: ${owner}-${repo}-${commitSha7}
+        const lastDash = id.lastIndexOf("-");
+        if (lastDash > 0) {
+          const withoutSha = id.slice(0, lastDash);
+          const firstDash = withoutSha.indexOf("-");
+          if (firstDash > 0) {
+            const owner = withoutSha.slice(0, firstDash);
+            const repo = withoutSha.slice(firstDash + 1);
+            targetRepoUrl = `https://github.com/${owner}/${repo}`;
+          }
+        }
+      }
+
+      if (targetRepoUrl) {
         try {
-          const [, owner, repo] = match;
-          const result = await ClientAnalyzer.analyze(`https://github.com/${owner}/${repo}`, 50);
+          const result = await ClientAnalyzer.analyze(targetRepoUrl, 50);
           get().setProjectData(
             result.projectId,
             result.graph,
@@ -253,6 +333,7 @@ export const useRepoStore = create<RepoState>((set, get) => ({
           return;
         }
       }
+
       set({ error: "Repository project not found", isLoading: false });
     }
   },
@@ -321,9 +402,12 @@ export const useRepoStore = create<RepoState>((set, get) => ({
 
   fetchModelsForProvider: async (provider, apiKey) => {
     const key = apiKey !== undefined ? apiKey : get().byokKeys[provider];
+    const cleanKey = (key || "").trim();
     set({ isFetchingModels: true });
+
+    // 1. Try server API (/api/settings/models)
     try {
-      const data = await ApiClient.getModels(provider, key || undefined);
+      const data = await ApiClient.getModels(provider, cleanKey || undefined);
       if (data.models && data.models.length > 0) {
         set((state) => ({
           availableModels: {
@@ -336,12 +420,35 @@ export const useRepoStore = create<RepoState>((set, get) => ({
         return data.models;
       }
     } catch (e: any) {
+      // 2. Direct client-side provider fallback if key is present
+      if (cleanKey) {
+        try {
+          const directModels = await ClientModelFetcher.fetchDirect(provider, cleanKey);
+          if (directModels && directModels.length > 0) {
+            set((state) => ({
+              availableModels: {
+                ...state.availableModels,
+                [provider]: directModels,
+              },
+              activeModel: directModels.includes(state.activeModel) ? state.activeModel : directModels[0],
+              isFetchingModels: false,
+            }));
+            return directModels;
+          }
+        } catch (directErr: any) {
+          console.warn("Direct model fetch error:", directErr);
+          set({ isFetchingModels: false });
+          throw new Error(directErr.message || e.message);
+        }
+      }
+
       console.warn("Could not fetch models for provider:", e);
       set({ isFetchingModels: false });
-      if (apiKey) {
+      if (cleanKey) {
         throw e;
       }
     }
+
     set({ isFetchingModels: false });
     return get().availableModels[provider] || DEFAULT_MODELS[provider] || [];
   },

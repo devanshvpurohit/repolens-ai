@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiClient } from "@/lib/api-client";
+import { getDemoProject } from "@repolens/shared";
 import {
   FolderGit2,
   GitCommit,
@@ -16,12 +17,40 @@ export function ProjectsListPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // 1. Gather local projects
+    const localListJson = localStorage.getItem("repolens_recent_projects");
+    const localList = localListJson ? JSON.parse(localListJson) : [];
+
+    // Always include Demo project
+    const demo = getDemoProject();
+    const demoEntry = {
+      id: demo.id,
+      name: demo.name,
+      owner: demo.owner,
+      repo: demo.repo,
+      commitSha: demo.commitSha,
+      metadata: demo.metadata,
+      graph: demo.graph,
+      createdAt: demo.createdAt,
+    };
+
     ApiClient.listProjects()
       .then((data) => {
-        setProjects(data.projects || []);
+        const serverProjects = data.projects || [];
+        const map = new Map<string, any>();
+        map.set(demoEntry.id, demoEntry);
+        for (const p of localList) map.set(p.id, p);
+        for (const p of serverProjects) map.set(p.id, p);
+        setProjects(Array.from(map.values()));
         setIsLoading(false);
       })
-      .catch(() => setIsLoading(false));
+      .catch(() => {
+        const map = new Map<string, any>();
+        map.set(demoEntry.id, demoEntry);
+        for (const p of localList) map.set(p.id, p);
+        setProjects(Array.from(map.values()));
+        setIsLoading(false);
+      });
   }, []);
 
   return (

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { getRepositoryStore, sendJson } from "../../packages/shared/src/index";
+import { getRepositoryStore, sendJson, getDemoProject } from "../../packages/shared/src/index";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   if (req.method !== "GET") {
@@ -15,7 +15,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   const store = getRepositoryStore();
-  const project = store.getProject(id);
+  let project = store.getProject(id);
+  if (!project && (id === "demo-express-react-app" || id === "demo")) {
+    project = getDemoProject();
+    store.saveProject(project);
+  }
 
   const file = project?.files?.get(path);
   if (file) {

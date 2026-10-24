@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRepoStore } from "@/stores/repo-store";
-import { ApiClient } from "@/lib/api-client";
 import {
   Key,
   X,
@@ -14,6 +13,7 @@ import {
   Cpu,
   RefreshCw,
   Layers,
+  Check,
 } from "lucide-react";
 
 export function ApiKeyModal() {
@@ -39,6 +39,9 @@ export function ApiKeyModal() {
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [fetchSuccessCount, setFetchSuccessCount] = useState<number | null>(null);
+  const [isDynamicList, setIsDynamicList] = useState(false);
+
+  const debounceTimerRef = useRef<any>(null);
 
   // Available models for currently selected provider
   const currentModels = availableModels[provider] || [];
@@ -50,25 +53,62 @@ export function ApiKeyModal() {
       setKeyInput(currentKey);
       setSelectedModel(activeModel);
 
-      // Always query models on open
-      handleFetchModels(activeProvider, currentKey);
+      if (currentKey) {
+        handleFetchModels(activeProvider, currentKey);
+      }
     }
   }, [isApiKeyModalOpen, activeProvider]);
 
+  // Debounced auto-fetch on typing API key
+  const handleKeyInputChange = (val: string) => {
+    setKeyInput(val);
+    setModelsError(null);
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    const trimmed = val.trim();
+    if (!trimmed) {
+      setFetchSuccessCount(null);
+      setIsDynamicList(false);
+      return;
+    }
+
+    // Trigger after user pauses typing for 600ms
+    debounceTimerRef.current = setTimeout(() => {
+      handleFetchModels(provider, trimmed);
+    }, 600);
+  };
+
   const handleFetchModels = async (prov = provider, key = keyInput) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    const trimmedKey = key.trim();
     setIsLoadingModels(true);
     setModelsError(null);
-    setFetchSuccessCount(null);
 
     try {
-      const models = await fetchModelsForProvider(prov, key.trim() || undefined);
+      const models = await fetchModelsForProvider(prov, trimmedKey || undefined);
       if (models && models.length > 0) {
-        setFetchSuccessCount(models.length);
+        if (trimmedKey) {
+          setFetchSuccessCount(models.length);
+          setIsDynamicList(true);
+          setByokKey(prov, trimmedKey);
+        } else {
+          setFetchSuccessCount(null);
+          setIsDynamicList(false);
+        }
+
         if (!models.includes(selectedModel)) {
           setSelectedModel(models[0]);
         }
       }
     } catch (err: any) {
+      setFetchSuccessCount(null);
+      setIsDynamicList(false);
       setModelsError(err.message || "Failed to query model list with this key.");
     } finally {
       setIsLoadingModels(false);
@@ -81,13 +121,15 @@ export function ApiKeyModal() {
     setKeyInput(existingKey);
     setSavedSuccess(false);
     setFetchSuccessCount(null);
+    setIsDynamicList(false);
     setModelsError(null);
 
     const defaultForProv = (availableModels[newProvider] || [])[0] || (newProvider === "gemini" ? "gemini-2.5-flash" : newProvider === "openai" ? "gpt-4o-mini" : "claude-3-5-sonnet");
     setSelectedModel(defaultForProv);
 
-    // Fetch models immediately for newly selected provider
-    handleFetchModels(newProvider, existingKey);
+    if (existingKey) {
+      handleFetchModels(newProvider, existingKey);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -123,8 +165,8 @@ export function ApiKeyModal() {
             <Key className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-100">AI Provider & Model Configuration</h2>
-            <p className="text-xs text-slate-400">Configure provider and query live model list from your API key</p>
+            <h2 className="text-base font-bold text-slate-100">AI Provider & Live Model Configuration</h2>
+            <p className="text-xs text-slate-400">Provide an API key to query live models dynamically from the provider</p>
           </div>
         </div>
 
@@ -178,10 +220,10 @@ export function ApiKeyModal() {
                 <Key className="w-3.5 h-3.5 text-cyan-400" />
                 <span>API Key</span>
               </label>
-              {fetchSuccessCount !== null && (
+              {isDynamicList && fetchSuccessCount !== null && (
                 <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                  <span>{fetchSuccessCount} models loaded</span>
+                  <span>{fetchSuccessCount} models loaded live</span>
                 </span>
               )}
             </div>
@@ -191,13 +233,7 @@ export function ApiKeyModal() {
                 <input
                   type={showKey ? "text" : "password"}
                   value={keyInput}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setKeyInput(val);
-                    if (val.length > 25) {
-                      handleFetchModels(provider, val);
-                    }
-                  }}
+                  onChange={(e) => handleKeyInputChange(e.target.value)}
                   onBlur={() => {
                     if (keyInput.trim()) {
                       handleFetchModels(provider, keyInput);
@@ -259,11 +295,15 @@ export function ApiKeyModal() {
               {isLoadingModels ? (
                 <span className="text-[11px] text-blue-400 flex items-center gap-1">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  Querying models from API key...
+                  Querying provider API...
                 </span>
               ) : currentModels.length > 0 ? (
-                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-md font-semibold">
-                  {currentModels.length} models available
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-semibold ${
+                  isDynamicList
+                    ? "text-emerald-400 bg-emerald-950/60 border border-emerald-800/60"
+                    : "text-slate-400 bg-slate-800/60 border border-slate-700/60"
+                }`}>
+                  {currentModels.length} models {isDynamicList ? "live" : "available"}
                 </span>
               ) : null}
             </div>
@@ -276,15 +316,15 @@ export function ApiKeyModal() {
             >
               {currentModels.map((m) => (
                 <option key={m} value={m}>
-                  {m} {m.includes("2.5-flash") ? "★ (Recommended • Free Tier)" : m.includes("flash") ? "(Fast • Free Tier)" : ""}
+                  {m} {m.includes("2.5-flash") ? "★ (Recommended • Free Tier)" : m.includes("2.5-pro") ? "★ (Flagship Reasoning)" : m.includes("flash") ? "(Fast • Free Tier)" : ""}
                 </option>
               ))}
             </select>
 
             <p className="text-[11px] text-slate-400 mt-1">
-              {currentModels.length > 4
-                ? `Active model list: ${currentModels.length} models loaded dynamically from API key.`
-                : "Select your desired model or click 'Fetch Models' above to refresh with your key."}
+              {isDynamicList
+                ? `Active model list: ${currentModels.length} models loaded dynamically from your API key.`
+                : "Select your desired model or enter your API key to query the live model list."}
             </p>
 
             {modelsError && (
@@ -314,7 +354,7 @@ export function ApiKeyModal() {
             >
               {savedSuccess ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                  <Check className="w-3.5 h-3.5 text-emerald-300" />
                   <span>Saved!</span>
                 </>
               ) : (

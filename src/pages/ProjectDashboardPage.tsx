@@ -120,37 +120,37 @@ export function ProjectDashboardPage() {
       </div>
 
       {/* 3-Panel Main Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Left Sidebar */}
         <Sidebar />
 
         {/* Center Panel (Graph / Code / Split / Audit) */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-slate-950 relative">
+        <main className="flex-1 flex flex-col overflow-hidden bg-slate-950 relative min-h-0">
           {activeCenterTab === "graph" && (
-            <div className="w-full h-full">
+            <div className="w-full h-full flex-1 min-h-0 relative">
               <KnowledgeGraphView />
             </div>
           )}
 
           {activeCenterTab === "code" && (
-            <div className="w-full h-full">
+            <div className="w-full h-full flex-1 min-h-0 relative">
               <MonacoViewer />
             </div>
           )}
 
           {activeCenterTab === "split" && (
-            <div className="w-full h-full flex flex-col md:flex-row">
-              <div className="flex-1 h-1/2 md:h-full border-b md:border-b-0 md:border-r border-slate-800">
+            <div className="w-full h-full flex-1 min-h-0 flex flex-col md:flex-row">
+              <div className="flex-1 h-1/2 md:h-full border-b md:border-b-0 md:border-r border-slate-800 relative min-h-0">
                 <KnowledgeGraphView />
               </div>
-              <div className="flex-1 h-1/2 md:h-full">
+              <div className="flex-1 h-1/2 md:h-full relative min-h-0">
                 <MonacoViewer />
               </div>
             </div>
           )}
 
           {activeCenterTab === "audit" && (
-            <div className="w-full h-full">
+            <div className="w-full h-full flex-1 min-h-0 overflow-y-auto">
               <AuditPanel onNavigateToFile={() => setActiveCenterTab("split")} />
             </div>
           )}

@@ -83,17 +83,19 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async listModels(apiKey?: string): Promise<string[]> {
-    const key = apiKey || process.env.OPENAI_API_KEY;
-    if (!key) {
-      return [this.defaultModel, "gpt-4o-mini", "gpt-4o", "o3-mini"];
+    const rawKey = (apiKey || process.env.OPENAI_API_KEY || "").trim();
+    if (!rawKey) {
+      return [this.defaultModel, "gpt-4o-mini", "gpt-4o", "o3-mini", "o1-mini"];
     }
 
     try {
       const res = await fetch("https://api.openai.com/v1/models", {
-        headers: { Authorization: `Bearer ${key}` },
+        headers: { Authorization: `Bearer ${rawKey}` },
       });
       if (!res.ok) {
-        throw new Error(`OpenAI API error (${res.status})`);
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData.error?.message || `OpenAI API error (${res.status})`;
+        throw new Error(errMsg);
       }
       const data = (await res.json()) as any;
       if (data.data && Array.isArray(data.data)) {
@@ -101,11 +103,23 @@ export class OpenAIProvider implements AIProvider {
           .map((m: any) => m.id)
           .filter((id: string) => id.includes("gpt") || id.startsWith("o1") || id.startsWith("o3"))
           .sort();
-        if (models.length > 0) return models;
+        if (models.length > 0) {
+          const priority = ["gpt-4o-mini", "gpt-4o", "o3-mini", "o1-mini", "gpt-4-turbo"];
+          models.sort((a: string, b: string) => {
+            const indexA = priority.indexOf(a);
+            const indexB = priority.indexOf(b);
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+            return a.localeCompare(b);
+          });
+          return models;
+        }
       }
       return [this.defaultModel];
-    } catch {
-      return [this.defaultModel, "gpt-4o-mini", "gpt-4o", "o3-mini"];
+    } catch (err: any) {
+      if (apiKey) throw err;
+      return [this.defaultModel, "gpt-4o-mini", "gpt-4o", "o3-mini", "o1-mini"];
     }
   }
 }

@@ -154,10 +154,14 @@ export class GitHubClient {
     }
 
     const content = await res.text();
+    const sizeBytes = typeof Buffer !== "undefined"
+      ? Buffer.byteLength(content, "utf8")
+      : new TextEncoder().encode(content).length;
+
     return {
       path,
       content,
-      sizeBytes: Buffer.byteLength(content, "utf8"),
+      sizeBytes,
       sha: meta.commitSha,
     };
   }

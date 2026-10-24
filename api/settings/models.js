@@ -46529,12 +46529,12 @@ var GeminiProvider = class {
   }
   async listModels(apiKey) {
     const envKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0;
-    const key = apiKey || envKey;
-    if (!key) {
-      return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+    const rawKey = (apiKey || envKey || "").trim();
+    if (!rawKey) {
+      return [this.defaultModel, "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(rawKey)}`);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         const errMsg = errData.error?.message || `Google Gemini API error (${res.status})`;
@@ -46543,14 +46543,33 @@ var GeminiProvider = class {
       const data = await res.json();
       if (data.models && Array.isArray(data.models)) {
         const models = data.models.filter((m2) => m2.supportedGenerationMethods?.includes("generateContent")).map((m2) => m2.name.replace(/^models\//, "")).filter((name) => !name.includes("embedding") && !name.includes("aqa"));
-        if (models.length > 0) return models;
+        if (models.length > 0) {
+          const priority = [
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-exp",
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-8b",
+            "gemini-1.5-pro"
+          ];
+          models.sort((a, b) => {
+            const indexA = priority.indexOf(a);
+            const indexB = priority.indexOf(b);
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+            return a.localeCompare(b);
+          });
+          return models;
+        }
       }
       return [this.defaultModel];
     } catch (err) {
       if (apiKey) {
         throw err;
       }
-      return [this.defaultModel, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+      return [this.defaultModel, "gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
   }
 };
@@ -46626,25 +46645,39 @@ var OpenAIProvider = class {
     }
   }
   async listModels(apiKey) {
-    const key = apiKey || process.env.OPENAI_API_KEY;
-    if (!key) {
-      return [this.defaultModel, "gpt-4o-mini", "gpt-4o", "o3-mini"];
+    const rawKey = (apiKey || process.env.OPENAI_API_KEY || "").trim();
+    if (!rawKey) {
+      return [this.defaultModel, "gpt-4o-mini", "gpt-4o", "o3-mini", "o1-mini"];
     }
     try {
       const res = await fetch("https://api.openai.com/v1/models", {
-        headers: { Authorization: `Bearer ${key}` }
+        headers: { Authorization: `Bearer ${rawKey}` }
       });
       if (!res.ok) {
-        throw new Error(`OpenAI API error (${res.status})`);
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData.error?.message || `OpenAI API error (${res.status})`;
+        throw new Error(errMsg);
       }
       const data = await res.json();
       if (data.data && Array.isArray(data.data)) {
         const models = data.data.map((m2) => m2.id).filter((id) => id.includes("gpt") || id.startsWith("o1") || id.startsWith("o3")).sort();
-        if (models.length > 0) return models;
+        if (models.length > 0) {
+          const priority = ["gpt-4o-mini", "gpt-4o", "o3-mini", "o1-mini", "gpt-4-turbo"];
+          models.sort((a, b) => {
+            const indexA = priority.indexOf(a);
+            const indexB = priority.indexOf(b);
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+            return a.localeCompare(b);
+          });
+          return models;
+        }
       }
       return [this.defaultModel];
-    } catch {
-      return [this.defaultModel, "gpt-4o-mini", "gpt-4o", "o3-mini"];
+    } catch (err) {
+      if (apiKey) throw err;
+      return [this.defaultModel, "gpt-4o-mini", "gpt-4o", "o3-mini", "o1-mini"];
     }
   }
 };
@@ -51435,16 +51468,27 @@ async function handler(req, res) {
     } else {
       return sendJson(res, 405, { error: "Method not allowed." });
     }
-    if (!apiKey) {
-      if (providerId === "gemini") apiKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : void 0;
-      if (providerId === "openai") apiKey = typeof process !== "undefined" ? process.env?.OPENAI_API_KEY : void 0;
-      if (providerId === "anthropic") apiKey = typeof process !== "undefined" ? process.env?.ANTHROPIC_API_KEY : void 0;
-    }
+    const trimmedKey = apiKey?.trim();
     const provider = defaultProviderManager.getProvider(providerId);
     let models = [];
+    let isDynamic = false;
     try {
-      models = await provider.listModels(apiKey);
-    } catch {
+      models = await provider.listModels(trimmedKey);
+      if (trimmedKey && models.length > 0) {
+        isDynamic = true;
+      }
+    } catch (err) {
+      if (trimmedKey) {
+        return sendJson(res, 400, {
+          error: err.message || `Failed to fetch models from ${providerId} with provided API key`,
+          provider: providerId,
+          models: [
+            provider.defaultModel,
+            providerId === "gemini" ? "gemini-2.5-flash" : providerId === "openai" ? "gpt-4o-mini" : "claude-3-5-sonnet"
+          ],
+          isDynamic: false
+        });
+      }
       models = [
         provider.defaultModel,
         providerId === "gemini" ? "gemini-2.5-flash" : providerId === "openai" ? "gpt-4o-mini" : "claude-3-5-sonnet"
@@ -51453,7 +51497,8 @@ async function handler(req, res) {
     return sendJson(res, 200, {
       provider: providerId,
       models: models.length > 0 ? models : [provider.defaultModel],
-      defaultModel: provider.defaultModel
+      defaultModel: provider.defaultModel,
+      isDynamic
     });
   } catch (err) {
     return sendJson(res, 500, {

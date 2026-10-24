@@ -32,17 +32,30 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return sendJson(res, 405, { error: "Method not allowed." });
     }
 
-    if (!apiKey) {
-      if (providerId === "gemini") apiKey = typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : undefined;
-      if (providerId === "openai") apiKey = typeof process !== "undefined" ? process.env?.OPENAI_API_KEY : undefined;
-      if (providerId === "anthropic") apiKey = typeof process !== "undefined" ? process.env?.ANTHROPIC_API_KEY : undefined;
-    }
+    const trimmedKey = apiKey?.trim();
 
     const provider = defaultProviderManager.getProvider(providerId);
     let models: string[] = [];
+    let isDynamic = false;
+
     try {
-      models = await provider.listModels(apiKey);
-    } catch {
+      models = await provider.listModels(trimmedKey);
+      if (trimmedKey && models.length > 0) {
+        isDynamic = true;
+      }
+    } catch (err: any) {
+      if (trimmedKey) {
+        // Return clear error if user provided a key that failed
+        return sendJson(res, 400, {
+          error: err.message || `Failed to fetch models from ${providerId} with provided API key`,
+          provider: providerId,
+          models: [
+            provider.defaultModel,
+            providerId === "gemini" ? "gemini-2.5-flash" : providerId === "openai" ? "gpt-4o-mini" : "claude-3-5-sonnet"
+          ],
+          isDynamic: false,
+        });
+      }
       models = [
         provider.defaultModel,
         providerId === "gemini" ? "gemini-2.5-flash" : providerId === "openai" ? "gpt-4o-mini" : "claude-3-5-sonnet"
@@ -53,6 +66,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       provider: providerId,
       models: models.length > 0 ? models : [provider.defaultModel],
       defaultModel: provider.defaultModel,
+      isDynamic,
     });
   } catch (err: any) {
     return sendJson(res, 500, {

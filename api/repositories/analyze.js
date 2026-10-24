@@ -294,10 +294,11 @@ var GitHubClient = class {
       throw new Error(`Failed to fetch file content for '${path}' (${res.status})`);
     }
     const content = await res.text();
+    const sizeBytes = typeof Buffer !== "undefined" ? Buffer.byteLength(content, "utf8") : new TextEncoder().encode(content).length;
     return {
       path,
       content,
-      sizeBytes: Buffer.byteLength(content, "utf8"),
+      sizeBytes,
       sha: meta.commitSha
     };
   }

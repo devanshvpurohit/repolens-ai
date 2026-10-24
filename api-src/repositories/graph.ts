@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { getRepositoryStore, sendJson } from "../../packages/shared/src/index";
+import { getRepositoryStore, sendJson, getDemoProject } from "../../packages/shared/src/index";
 import { GitHubClient } from "../../packages/github-ingestion/src/index";
 import { buildKnowledgeGraph } from "../../packages/analysis-adapter/src/index";
 import { chunkSourceFile, type SourceChunk } from "../../packages/retrieval/src/index";
@@ -21,6 +21,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   let project = store.getProject(id);
+
+  if (!project && (id === "demo-express-react-app" || id === "demo")) {
+    project = getDemoProject();
+    store.saveProject(project);
+  }
 
   // On-demand auto-ingestion fallback from GitHub if not found in memory or /tmp
   if (!project) {
